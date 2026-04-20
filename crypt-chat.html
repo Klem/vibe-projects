@@ -375,7 +375,7 @@
   </div>
   <div class="hdr-right">
     <div class="pill">
-      <span class="dot" id="statusDot"></span>
+      <span class="dot off" id="statusDot"></span>
       <span id="statusText">…</span>
     </div>
   </div>
@@ -428,7 +428,6 @@
 // ═══════════════════════════════════════
 //  SECURE CONTEXT CHECK
 // ═══════════════════════════════════════
-// crypto.subtle requires HTTPS or localhost — it is undefined on file:// in Chrome/Edge.
 if (!window.isSecureContext || !crypto.subtle) {
   document.body.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#07090c;font-family:'IBM Plex Mono',monospace;color:#c9d1d9;text-align:center;padding:2rem;">
@@ -436,26 +435,49 @@ if (!window.isSecureContext || !crypto.subtle) {
         <div style="font-size:2rem;margin-bottom:1rem;">🔒</div>
         <div style="color:#ff6369;font-size:.9rem;margin-bottom:.6rem;">Contexte non sécurisé</div>
         <div style="font-size:.75rem;color:#4a5260;line-height:1.7;">
-          L'API Web Crypto (<code>crypto.subtle</code>) requiert HTTPS ou localhost.<br>
-          Vous ne pouvez pas ouvrir ce fichier directement via <code>file://</code>.<br><br>
+          L'API Web Crypto requiert HTTPS ou localhost.<br>
           <strong style="color:#c9d1d9;">Solutions :</strong><br>
-          • Servez le fichier via un serveur local :<br>
-          <code style="color:#00e59b;">npx serve .</code> ou <code style="color:#00e59b;">python -m http.server</code><br>
-          • Ou déployez-le sur un hébergeur HTTPS (GitHub Pages, Netlify…)
+          • <code style="color:#00e59b;">npx serve .</code> ou <code style="color:#00e59b;">python -m http.server</code><br>
+          • Déployez sur GitHub Pages, Netlify…
         </div>
       </div>
     </div>`;
-  throw new Error('crypto.subtle unavailable — not a secure context (file:// is not allowed)');
+  throw new Error('crypto.subtle unavailable');
 }
 
 // ═══════════════════════════════════════
 //  CONFIG
 // ═══════════════════════════════════════
 const ROOM_PREFIX = 'crypt-v1-';
-// On crée N "slots" par room. Chaque nouveau visiteur
-// essaie de se connecter à tous les slots existants.
-// C'est le mécanisme de découverte sans serveur.
 const MAX_SLOTS = 20;
+const DISCOVERY_INTERVAL_MS = 5000; // re-scan every 5s to catch latecomers
+
+// FIX: explicit PeerJS server config using the official hosted server
+// (leaving host/port/path undefined makes PeerJS fall back to an unreliable broker)
+const PEER_CONFIG = {
+  host: '0.peerjs.com',
+  port: 443,
+  secure: true,
+  path: '/',
+  config: {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+      // Public TURN servers for symmetric NAT traversal
+      {
+        urls: 'turn:openrelay.metered.ca:80',
+        username: 'openrelayproject',
+        credential: 'openrelayproject'
+      },
+      {
+        urls: 'turn:openrelay.metered.ca:443',
+        username: 'openrelayproject',
+        credential: 'openrelayproject'
+      }
+    ]
+  }
+};
 
 // ═══════════════════════════════════════
 //  STATE
@@ -465,10 +487,12 @@ let roomName = '';
 let mySlot = -1;
 let peer = null;
 let myKeyPair = null;
+let discoveryTimer = null;
+// Set of slot IDs we've already attempted to connect to (avoid spam)
+const attemptedSlots = new Set();
 
 // peerId → { conn, username, sharedKey }
 const peers = new Map();
-// All chat messages (shared room = single conversation)
 const chatLog = [];
 
 // ═══════════════════════════════════════
@@ -529,14 +553,12 @@ async function joinRoom() {
   document.getElementById('entryModal').style.display = 'none';
   document.getElementById('roomDisplay').value = roomName;
   document.getElementById('chatRoomName').textContent = '#' + roomName;
+  document.getElementById('statusText').textContent = 'connexion…';
 
   myKeyPair = await genKeyPair();
-
-  // Pick a random slot and try to register
   await trySlots();
 }
 
-// Key listeners for modal
 document.getElementById('inpUsername').addEventListener('keydown', e => {
   if (e.key === 'Enter') document.getElementById('inpRoom').focus();
 });
@@ -545,36 +567,30 @@ document.getElementById('inpRoom').addEventListener('keydown', e => {
 });
 
 async function trySlots() {
-  // Try to claim a slot (deterministic peer ID based on room + slot)
   const shuffled = [...Array(MAX_SLOTS).keys()].sort(() => Math.random() - .5);
 
   for (const slot of shuffled) {
     const id = ROOM_PREFIX + roomName + '-' + slot;
     try {
       await tryClaimSlot(id, slot);
-      return; // success
+      return;
     } catch {
-      // Slot taken, try next
+      // Slot taken or error — try next
     }
   }
 
-  // All slots taken → connect with random ID and rely on discovery
+  // All slots taken → join with random ID
   initWithRandomId();
 }
 
 function tryClaimSlot(id, slot) {
   return new Promise((resolve, reject) => {
-    const p = new Peer(id, {
-      config: { iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
-      ]}
-    });
+    const p = new Peer(id, PEER_CONFIG);
 
     const timeout = setTimeout(() => {
       p.destroy();
       reject(new Error('timeout'));
-    }, 4000);
+    }, 5000);
 
     p.on('open', () => {
       clearTimeout(timeout);
@@ -593,14 +609,12 @@ function tryClaimSlot(id, slot) {
 }
 
 function initWithRandomId() {
-  peer = new Peer(undefined, {
-    config: { iceServers: [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' }
-    ]}
-  });
+  peer = new Peer(undefined, PEER_CONFIG);
   peer.on('open', () => onPeerReady());
-  peer.on('error', err => console.error(err));
+  peer.on('error', err => {
+    sysMsg(`⚠️ Erreur PeerJS: ${err.type}`);
+    console.error('PeerJS error', err);
+  });
 }
 
 function onPeerReady() {
@@ -611,13 +625,21 @@ function onPeerReady() {
   document.getElementById('msgInput').disabled = false;
   document.getElementById('sendBtn').disabled = false;
 
-  sysMsg(`Connecté au salon #${roomName} — votre ID : ${id}`);
+  sysMsg(`Connecté au salon #${roomName} — ID: ${id}`);
 
   // Listen for incoming connections
-  peer.on('connection', conn => handleConn(conn));
+  peer.on('connection', conn => {
+    console.log('[PeerJS] incoming connection from', conn.peer);
+    handleConn(conn);
+  });
 
-  // Now scan all slots to discover peers
+  peer.on('error', err => {
+    console.warn('[PeerJS] error', err.type, err);
+  });
+
+  // Initial discovery + periodic retry
   discoverPeers();
+  discoveryTimer = setInterval(discoverPeers, DISCOVERY_INTERVAL_MS);
 }
 
 // ═══════════════════════════════════════
@@ -626,14 +648,26 @@ function onPeerReady() {
 function discoverPeers() {
   for (let s = 0; s < MAX_SLOTS; s++) {
     const targetId = ROOM_PREFIX + roomName + '-' + s;
-    if (targetId === peer.id) continue; // skip self
+    if (targetId === peer.id) continue;
 
-    // Try to connect — if the slot is taken by someone, it works
+    // FIX: skip if already connected to this peer (check by peer.id match)
+    const alreadyConnected = [...peers.values()].some(
+      p => p.conn?.peer === targetId && p.conn?.open
+    );
+    if (alreadyConnected) continue;
+
+    // FIX: don't spam — only attempt once per slot ID unless it failed last time
+    // We use a short debounce: only attempt if not currently pending
+    if (attemptedSlots.has(targetId)) continue;
+
+    attemptedSlots.add(targetId);
+    // Remove from attempted after a delay so we retry stale slots
+    setTimeout(() => attemptedSlots.delete(targetId), DISCOVERY_INTERVAL_MS * 2);
+
+    console.log('[discovery] attempting slot', targetId);
     const conn = peer.connect(targetId, { reliable: true });
     handleConn(conn);
   }
-
-  sysMsg('Recherche de pairs dans le salon…');
 }
 
 // ═══════════════════════════════════════
@@ -644,21 +678,27 @@ function handleConn(conn) {
   if (pid === peer.id) return;
 
   conn.on('open', async () => {
-    // Avoid duplicates
-    if (peers.has(pid) && peers.get(pid).conn?.open) {
-      conn.close();
-      return;
+    console.log('[conn] open with', pid);
+
+    // Avoid duplicates — keep only the newest connection
+    if (peers.has(pid)) {
+      const existing = peers.get(pid);
+      if (existing.conn?.open) {
+        console.log('[conn] duplicate, closing new one for', pid);
+        conn.close();
+        return;
+      }
     }
 
+    // Register peer (username & key will be filled on handshake)
     peers.set(pid, { conn, username: pid.slice(-6), sharedKey: null });
 
-    // Send handshake
+    // Send handshake with our public key + known peers
     const pub = await exportPub(myKeyPair.publicKey);
     conn.send(JSON.stringify({
       t: 'hello',
       u: myUsername,
       pk: pub,
-      // Share our known peer IDs so the newcomer can connect to them too
       peers: [...peers.keys()].filter(k => k !== pid)
     }));
 
@@ -683,6 +723,7 @@ function handleConn(conn) {
       if (msg.peers) {
         for (const otherId of msg.peers) {
           if (otherId !== peer.id && !peers.has(otherId)) {
+            console.log('[mesh] connecting to introduced peer', otherId);
             const c = peer.connect(otherId, { reliable: true });
             handleConn(c);
           }
@@ -708,14 +749,14 @@ function handleConn(conn) {
     renderPeers();
   });
 
-  conn.on('error', () => {
-    // Slot probably empty — ignore silently
+  conn.on('error', (err) => {
+    console.log('[conn] error with', pid, err);
     peers.delete(pid);
   });
 }
 
 // ═══════════════════════════════════════
-//  SEND MESSAGE (broadcast to all peers)
+//  SEND MESSAGE
 // ═══════════════════════════════════════
 async function sendToAll() {
   const input = document.getElementById('msgInput');
@@ -726,14 +767,20 @@ async function sendToAll() {
   input.value = '';
   input.focus();
 
+  let sent = 0;
   for (const [, p] of peers) {
     if (!p.sharedKey || !p.conn?.open) continue;
     try {
       const payload = await encrypt(text, p.sharedKey);
       p.conn.send(JSON.stringify({ t: 'msg', p: payload }));
+      sent++;
     } catch (e) {
       console.warn('Send error', e);
     }
+  }
+
+  if (sent === 0 && peers.size === 0) {
+    sysMsg('⚠️ Aucun pair connecté — message visible localement seulement');
   }
 }
 
@@ -780,7 +827,7 @@ function renderPeers() {
       <div class="peer-av">${ini}</div>
       <div>
         <div class="peer-nm">${esc(p.username)}</div>
-        <div class="peer-st">${enc} chiffré</div>
+        <div class="peer-st">${enc} ${p.sharedKey ? 'chiffré' : 'handshake…'}</div>
       </div>
     </div>`;
   }).join('') || '<div style="padding:.8rem;font-size:.68rem;color:var(--text-dim);text-align:center;">Aucun pair pour l\'instant…<br>Partagez le nom du salon.</div>';
@@ -801,6 +848,7 @@ function copyMyId() {
 }
 
 function changeRoom() {
+  if (discoveryTimer) clearInterval(discoveryTimer);
   location.reload();
 }
 </script>
