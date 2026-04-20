@@ -1,0 +1,1935 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEXUS // Recherche Associations</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-deep: #050508;
+            --bg-surface: #0a0a0f;
+            --bg-elevated: #101018;
+            --border-subtle: rgba(255,255,255,0.06);
+            --border-active: rgba(255,255,255,0.15);
+            --text-primary: rgba(255,255,255,0.92);
+            --text-secondary: rgba(255,255,255,0.55);
+            --text-tertiary: rgba(255,255,255,0.3);
+            --accent-cyan: #00d4ff;
+            --accent-violet: #8b5cf6;
+            --accent-emerald: #10b981;
+            --accent-amber: #f59e0b;
+            --glow-cyan: rgba(0, 212, 255, 0.15);
+            --glow-violet: rgba(139, 92, 246, 0.15);
+        }
+
+        @font-face {
+            font-family: 'Syne';
+            font-display: swap;
+        }
+
+        body {
+            background: var(--bg-deep);
+            font-family: 'Syne', sans-serif;
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* 3D Canvas Background */
+        #canvas-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        /* Main Container */
+        .main-container {
+            position: relative;
+            z-index: 1;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        header {
+            padding: 20px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-subtle);
+            backdrop-filter: blur(20px);
+            background: rgba(5,5,8,0.7);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-icon {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-violet));
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .logo-text {
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: 4px;
+        }
+
+        .logo-sub {
+            font-size: 10px;
+            color: var(--text-tertiary);
+            letter-spacing: 2px;
+            margin-top: 2px;
+        }
+
+        .header-stats {
+            display: flex;
+            gap: 30px;
+            font-family: 'Space Mono', monospace;
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+        }
+
+        .stat-value {
+            font-size: 16px;
+            color: var(--text-primary);
+            font-weight: 700;
+        }
+
+        /* Search Section */
+        .search-section {
+            padding: 60px 40px 40px;
+            max-width: 1000px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .search-hero {
+            text-align: center;
+            margin-bottom: 50px;
+        }
+
+        .search-hero h1 {
+            font-size: 42px;
+            font-weight: 700;
+            margin-bottom: 15px;
+            background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent-cyan) 50%, var(--accent-violet) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: gradient-shift 8s ease infinite;
+            background-size: 200% 200%;
+        }
+
+        @keyframes gradient-shift {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .search-hero p {
+            font-size: 16px;
+            color: var(--text-secondary);
+            max-width: 500px;
+            margin: 0 auto;
+            line-height: 1.6;
+        }
+
+        /* Search Container */
+        .search-container {
+            position: relative;
+            margin-bottom: 30px;
+        }
+
+        .search-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: 16px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .search-wrapper:focus-within {
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 0 4px var(--glow-cyan), 0 20px 60px rgba(0,0,0,0.4);
+        }
+
+        .search-icon {
+            padding: 0 20px;
+            color: var(--text-tertiary);
+            font-size: 20px;
+        }
+
+        #search-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            padding: 22px 0;
+            font-size: 18px;
+            font-family: 'Syne', sans-serif;
+            color: var(--text-primary);
+            outline: none;
+        }
+
+        #search-input::placeholder {
+            color: var(--text-tertiary);
+        }
+
+        .search-btn {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-violet));
+            border: none;
+            padding: 22px 35px;
+            color: white;
+            font-family: 'Syne', sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+        }
+
+        .search-btn:hover {
+            filter: brightness(1.1);
+        }
+
+        .search-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Autocomplete */
+        .autocomplete-container {
+            position: absolute;
+            top: calc(100% + 8px);
+            left: 0;
+            right: 0;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            overflow: hidden;
+            display: none;
+            z-index: 50;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+
+        .autocomplete-container.active {
+            display: block;
+            animation: slide-down 0.2s ease;
+        }
+
+        @keyframes slide-down {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .autocomplete-item {
+            padding: 15px 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            border-bottom: 1px solid var(--border-subtle);
+            transition: background 0.2s;
+        }
+
+        .autocomplete-item:last-child {
+            border-bottom: none;
+        }
+
+        .autocomplete-item:hover,
+        .autocomplete-item.selected {
+            background: rgba(0,212,255,0.05);
+        }
+
+        .autocomplete-icon {
+            width: 36px;
+            height: 36px;
+            background: var(--bg-surface);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+
+        .autocomplete-text {
+            flex: 1;
+        }
+
+        .autocomplete-name {
+            font-weight: 500;
+            margin-bottom: 3px;
+        }
+
+        .autocomplete-info {
+            font-size: 12px;
+            color: var(--text-tertiary);
+        }
+
+        /* Quick Filters */
+        .quick-filters {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .quick-filter {
+            padding: 8px 16px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: 20px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'Syne', sans-serif;
+        }
+
+        .quick-filter:hover {
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+        }
+
+        .quick-filter.active {
+            background: var(--accent-cyan);
+            border-color: var(--accent-cyan);
+            color: var(--bg-deep);
+        }
+
+        /* Advanced Search Toggle */
+        .advanced-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 15px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: color 0.2s;
+            font-size: 13px;
+        }
+
+        .advanced-toggle:hover {
+            color: var(--accent-cyan);
+        }
+
+        .advanced-toggle svg {
+            transition: transform 0.3s;
+        }
+
+        .advanced-toggle.open svg {
+            transform: rotate(180deg);
+        }
+
+        /* Advanced Filters Panel */
+        .advanced-panel {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s ease;
+        }
+
+        .advanced-panel.open {
+            max-height: 500px;
+        }
+
+        .advanced-content {
+            padding: 25px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: 16px;
+            margin-bottom: 20px;
+        }
+
+        .filters-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .filter-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-tertiary);
+        }
+
+        .filter-select,
+        .filter-input {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            padding: 12px 15px;
+            color: var(--text-primary);
+            font-family: 'Syne', sans-serif;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .filter-select:focus,
+        .filter-input:focus {
+            border-color: var(--accent-cyan);
+        }
+
+        .filter-select option {
+            background: var(--bg-elevated);
+        }
+
+        /* Results Section */
+        .results-section {
+            flex: 1;
+            padding: 0 40px 60px;
+        }
+
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .results-count {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .results-count strong {
+            color: var(--accent-cyan);
+            font-weight: 600;
+        }
+
+        .sort-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .sort-btn {
+            padding: 8px 15px;
+            background: transparent;
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            font-family: 'Syne', sans-serif;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .sort-btn:hover,
+        .sort-btn.active {
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+        }
+
+        /* Results Grid - 3D Card Layout */
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 25px;
+            perspective: 1000px;
+        }
+
+        /* Association Card */
+        .association-card {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: 20px;
+            overflow: hidden;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transform-style: preserve-3d;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .association-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent-cyan), var(--accent-violet));
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .association-card:hover {
+            transform: translateY(-8px) rotateX(2deg);
+            border-color: var(--border-active);
+            box-shadow: 
+                0 30px 60px rgba(0,0,0,0.4),
+                0 0 40px var(--glow-cyan);
+        }
+
+        .association-card:hover::before {
+            opacity: 1;
+        }
+
+        .card-header {
+            padding: 25px 25px 15px;
+            display: flex;
+            gap: 18px;
+            align-items: flex-start;
+        }
+
+        .card-avatar {
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-violet));
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            font-weight: 700;
+            flex-shrink: 0;
+            box-shadow: 0 8px 20px var(--glow-violet);
+        }
+
+        .card-title-group {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .card-name {
+            font-size: 17px;
+            font-weight: 600;
+            margin-bottom: 6px;
+            line-height: 1.3;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .card-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .card-status.active {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--accent-emerald);
+        }
+
+        .card-status.inactive {
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        .card-body {
+            padding: 0 25px 20px;
+        }
+
+        .card-info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+
+        .info-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .info-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-tertiary);
+        }
+
+        .info-value {
+            font-size: 13px;
+            color: var(--text-secondary);
+            font-family: 'Space Mono', monospace;
+        }
+
+        .card-footer {
+            padding: 15px 25px;
+            background: var(--bg-surface);
+            border-top: 1px solid var(--border-subtle);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-tags {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .card-tag {
+            padding: 4px 10px;
+            background: rgba(139, 92, 246, 0.1);
+            border-radius: 6px;
+            font-size: 10px;
+            color: var(--accent-violet);
+            letter-spacing: 0.5px;
+        }
+
+        .card-action {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            background: transparent;
+            border: 1px solid var(--border-subtle);
+            color: var(--text-tertiary);
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .card-action:hover {
+            background: var(--accent-cyan);
+            border-color: var(--accent-cyan);
+            color: var(--bg-deep);
+        }
+
+        /* Loading State */
+        .loading-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 80px 20px;
+            gap: 20px;
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 2px solid var(--border-subtle);
+            border-top-color: var(--accent-cyan);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        /* Infinite Scroll Sentinel */
+        #scroll-sentinel {
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-tertiary);
+            font-size: 12px;
+            margin-top: 20px;
+        }
+
+        #scroll-sentinel.loading::after {
+            content: '';
+            width: 24px;
+            height: 24px;
+            border: 2px solid var(--border-subtle);
+            border-top-color: var(--accent-cyan);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        /* Filter Active Indicator */
+        .filter-active-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            background: rgba(0, 212, 255, 0.1);
+            border: 1px solid var(--accent-cyan);
+            border-radius: 20px;
+            font-size: 11px;
+            color: var(--accent-cyan);
+            margin-left: 15px;
+        }
+
+        .filter-active-indicator button {
+            background: none;
+            border: none;
+            color: var(--accent-cyan);
+            cursor: pointer;
+            padding: 0;
+            font-size: 14px;
+            line-height: 1;
+        }
+
+        .filter-active-indicator button:hover {
+            color: white;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 80px 20px;
+        }
+
+        .empty-icon {
+            font-size: 60px;
+            margin-bottom: 20px;
+            opacity: 0.3;
+        }
+
+        .empty-title {
+            font-size: 22px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .empty-text {
+            color: var(--text-secondary);
+            max-width: 400px;
+            margin: 0 auto;
+            line-height: 1.6;
+        }
+
+        /* Pagination */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 50px;
+        }
+
+        .page-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-secondary);
+            font-family: 'Syne', sans-serif;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .page-btn:hover {
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+        }
+
+        .page-btn.active {
+            background: var(--accent-cyan);
+            border-color: var(--accent-cyan);
+            color: var(--bg-deep);
+        }
+
+        .page-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(5,5,8,0.9);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+            animation: fade-in 0.3s ease;
+        }
+
+        @keyframes fade-in {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .modal-content {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: 24px;
+            max-width: 700px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            animation: modal-enter 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes modal-enter {
+            from { 
+                opacity: 0; 
+                transform: scale(0.9) translateY(20px); 
+            }
+            to { 
+                opacity: 1; 
+                transform: scale(1) translateY(0); 
+            }
+        }
+
+        .modal-header {
+            padding: 30px;
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .modal-close {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            background: transparent;
+            border: 1px solid var(--border-subtle);
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 18px;
+        }
+
+        .modal-close:hover {
+            background: rgba(239, 68, 68, 0.1);
+            border-color: #ef4444;
+            color: #ef4444;
+        }
+
+        .modal-body {
+            padding: 30px;
+        }
+
+        .detail-section {
+            margin-bottom: 25px;
+        }
+
+        .detail-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .detail-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--text-tertiary);
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+
+        .detail-item {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .detail-label {
+            font-size: 12px;
+            color: var(--text-tertiary);
+        }
+
+        .detail-value {
+            font-size: 15px;
+            color: var(--text-primary);
+        }
+
+        .detail-value.mono {
+            font-family: 'Space Mono', monospace;
+            color: var(--accent-cyan);
+        }
+
+        .modal-footer {
+            padding: 20px 30px;
+            border-top: 1px solid var(--border-subtle);
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .modal-btn {
+            padding: 12px 24px;
+            border-radius: 10px;
+            font-family: 'Syne', sans-serif;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .modal-btn.primary {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-violet));
+            border: none;
+            color: white;
+        }
+
+        .modal-btn.secondary {
+            background: transparent;
+            border: 1px solid var(--border-subtle);
+            color: var(--text-secondary);
+        }
+
+        .modal-btn:hover {
+            filter: brightness(1.1);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            header {
+                padding: 15px 20px;
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            .search-section {
+                padding: 30px 20px;
+            }
+
+            .search-hero h1 {
+                font-size: 28px;
+            }
+
+            .results-section {
+                padding: 0 20px 40px;
+            }
+
+            .results-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .filters-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .detail-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-deep);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-subtle);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-tertiary);
+        }
+
+        /* Utility */
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <!-- 3D Background -->
+    <canvas id="canvas-bg"></canvas>
+
+    <div class="main-container">
+        <!-- Header -->
+        <header>
+            <div class="logo">
+                <div class="logo-icon">N</div>
+                <div>
+                    <div class="logo-text">NEXUS</div>
+                    <div class="logo-sub">Annuaire Associations</div>
+                </div>
+            </div>
+            <div class="header-stats">
+                <div class="stat-item">
+                    <span class="stat-value" id="total-results">--</span>
+                    <span>Résultats</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value" id="response-time">--</span>
+                    <span>ms</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Search Section -->
+        <section class="search-section">
+            <div class="search-hero">
+                <h1>Explorez les Associations</h1>
+                <p>Recherchez parmi les associations françaises. Données officielles issues du répertoire SIRENE.</p>
+            </div>
+
+            <div class="search-container">
+                <div class="search-wrapper">
+                    <span class="search-icon">⌕</span>
+                    <input 
+                        type="text" 
+                        id="search-input" 
+                        placeholder="Nom, SIREN, ville, activité..."
+                        autocomplete="off"
+                    >
+                    <button class="search-btn" id="search-btn">Rechercher</button>
+                </div>
+                <div class="autocomplete-container" id="autocomplete"></div>
+            </div>
+
+            <div class="quick-filters">
+                <button class="quick-filter" data-filter="sport">🏃 Sport</button>
+                <button class="quick-filter" data-filter="culture">🎭 Culture</button>
+                <button class="quick-filter" data-filter="social">🤝 Social</button>
+                <button class="quick-filter" data-filter="environnement">🌿 Environnement</button>
+                <button class="quick-filter" data-filter="education">📚 Éducation</button>
+                <button class="quick-filter" data-filter="sante">🏥 Santé</button>
+            </div>
+
+            <div class="advanced-toggle" id="advanced-toggle">
+                <span>Filtrer les résultats</span>
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                    <path d="M2 4L6 8L10 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+            </div>
+
+            <div class="advanced-panel" id="advanced-panel">
+                <div class="advanced-content">
+                    <div class="filters-grid">
+                        <div class="filter-group">
+                            <label class="filter-label">Département</label>
+                            <select class="filter-select" id="filter-dept">
+                                <option value="">Tous les départements</option>
+                                <option value="75">75 - Paris</option>
+                                <option value="69">69 - Rhône</option>
+                                <option value="13">13 - Bouches-du-Rhône</option>
+                                <option value="33">33 - Gironde</option>
+                                <option value="31">31 - Haute-Garonne</option>
+                                <option value="59">59 - Nord</option>
+                                <option value="44">44 - Loire-Atlantique</option>
+                                <option value="67">67 - Bas-Rhin</option>
+                                <option value="06">06 - Alpes-Maritimes</option>
+                                <option value="34">34 - Hérault</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label class="filter-label">Code Postal</label>
+                            <input type="text" class="filter-input" id="filter-cp" placeholder="ex: 75001">
+                        </div>
+                        <div class="filter-group">
+                            <label class="filter-label">Ville</label>
+                            <input type="text" class="filter-input" id="filter-ville" placeholder="ex: Paris">
+                        </div>
+                        <div class="filter-group">
+                            <label class="filter-label">Statut</label>
+                            <select class="filter-select" id="filter-status">
+                                <option value="">Tous</option>
+                                <option value="A">Actives uniquement</option>
+                                <option value="C">Cessées uniquement</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label class="filter-label">Nombre de salariés</label>
+                            <select class="filter-select" id="filter-effectif">
+                                <option value="">Tous</option>
+                                <option value="00">0 salarié</option>
+                                <option value="01,02,03">1 à 9 salariés</option>
+                                <option value="11,12,21">10 à 49 salariés</option>
+                                <option value="22,31,32">50 à 199 salariés</option>
+                                <option value="41,42,51,52,53">200+ salariés</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Results Section -->
+        <section class="results-section">
+            <div class="results-header hidden" id="results-header">
+                <div class="results-count">
+                    <strong id="results-count-value">0</strong> associations trouvées
+                    <span id="filter-indicator"></span>
+                </div>
+                <div class="sort-controls">
+                    <span style="font-size: 11px; color: var(--text-tertiary);" id="displayed-info"></span>
+                </div>
+            </div>
+
+            <div id="results-container">
+                <div class="empty-state" id="initial-state">
+                    <div class="empty-icon">🔍</div>
+                    <h3 class="empty-title">Commencez votre recherche</h3>
+                    <p class="empty-text">Entrez le nom d'une association, un numéro SIREN, une ville ou une activité pour explorer le répertoire.</p>
+                </div>
+            </div>
+
+
+        </section>
+    </div>
+
+    <!-- Detail Modal -->
+    <div class="modal-overlay" id="modal-overlay">
+        <div class="modal-content" id="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h2 id="modal-title" style="font-size: 22px; margin-bottom: 8px;">Association</h2>
+                    <span id="modal-status" class="card-status active">
+                        <span class="status-dot"></span>
+                        Active
+                    </span>
+                </div>
+                <button class="modal-close" id="modal-close">✕</button>
+            </div>
+            <div class="modal-body" id="modal-body">
+                <!-- Content loaded dynamically -->
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn secondary" id="modal-close-btn">Fermer</button>
+                <a href="#" class="modal-btn primary" id="modal-link" target="_blank">Voir sur l'Annuaire</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==================== 3D BACKGROUND ====================
+        const canvas = document.getElementById('canvas-bg');
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 30;
+
+        // Create particles
+        const particlesGeometry = new THREE.BufferGeometry();
+        const particlesCount = 1500;
+        const positions = new Float32Array(particlesCount * 3);
+        const colors = new Float32Array(particlesCount * 3);
+
+        for (let i = 0; i < particlesCount * 3; i += 3) {
+            positions[i] = (Math.random() - 0.5) * 100;
+            positions[i + 1] = (Math.random() - 0.5) * 100;
+            positions[i + 2] = (Math.random() - 0.5) * 50;
+
+            const t = Math.random();
+            colors[i] = t * 0.55 + (1 - t) * 0;
+            colors[i + 1] = t * 0.36 + (1 - t) * 0.83;
+            colors[i + 2] = t * 0.96 + (1 - t) * 1;
+        }
+
+        particlesGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        particlesGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+        const particlesMaterial = new THREE.PointsMaterial({
+            size: 0.15,
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.6,
+            blending: THREE.AdditiveBlending
+        });
+
+        const particles = new THREE.Points(particlesGeometry, particlesMaterial);
+        scene.add(particles);
+
+        // Create connecting lines
+        const linesGeometry = new THREE.BufferGeometry();
+        const linesPositions = [];
+        const connectionDistance = 8;
+
+        for (let i = 0; i < particlesCount; i++) {
+            for (let j = i + 1; j < particlesCount; j++) {
+                const dx = positions[i * 3] - positions[j * 3];
+                const dy = positions[i * 3 + 1] - positions[j * 3 + 1];
+                const dz = positions[i * 3 + 2] - positions[j * 3 + 2];
+                const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+                if (dist < connectionDistance && Math.random() > 0.97) {
+                    linesPositions.push(
+                        positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2],
+                        positions[j * 3], positions[j * 3 + 1], positions[j * 3 + 2]
+                    );
+                }
+            }
+        }
+
+        linesGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(linesPositions), 3));
+        const linesMaterial = new THREE.LineBasicMaterial({
+            color: 0x00d4ff,
+            transparent: true,
+            opacity: 0.08
+        });
+        const lines = new THREE.LineSegments(linesGeometry, linesMaterial);
+        scene.add(lines);
+
+        // Animation
+        let mouseX = 0, mouseY = 0;
+        document.addEventListener('mousemove', (e) => {
+            mouseX = (e.clientX / window.innerWidth - 0.5) * 2;
+            mouseY = (e.clientY / window.innerHeight - 0.5) * 2;
+        });
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            particles.rotation.y += 0.0003;
+            particles.rotation.x += 0.0001;
+            lines.rotation.y += 0.0003;
+            lines.rotation.x += 0.0001;
+
+            camera.position.x += (mouseX * 5 - camera.position.x) * 0.02;
+            camera.position.y += (-mouseY * 5 - camera.position.y) * 0.02;
+            camera.lookAt(scene.position);
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // ==================== API CONFIGURATION ====================
+        const API_BASE = 'https://recherche-entreprises.api.gouv.fr';
+        const NATURE_JURIDIQUE_ASSO = '9210,9220,9221,9222,9223,9224,9230,9240,9260,9300';
+        const ITEMS_PER_PAGE = 20;        // Items to display per scroll batch
+        const API_PER_PAGE = 25;          // Max allowed by API
+
+        // ==================== STATE ====================
+        let allResults = [];           // All results from API
+        let filteredResults = [];      // Results after local filtering
+        let displayedCount = 0;        // Number of cards currently displayed
+        let searchTimeout = null;
+        let lastQuery = '';
+        let isLoading = false;
+        let hasMoreResults = true;
+        let currentPage = 1;
+        let totalApiResults = 0;
+
+        // ==================== DOM ELEMENTS ====================
+        const searchInput = document.getElementById('search-input');
+        const searchBtn = document.getElementById('search-btn');
+        const autocomplete = document.getElementById('autocomplete');
+        const advancedToggle = document.getElementById('advanced-toggle');
+        const advancedPanel = document.getElementById('advanced-panel');
+        const resultsContainer = document.getElementById('results-container');
+        const resultsHeader = document.getElementById('results-header');
+        const modalOverlay = document.getElementById('modal-overlay');
+
+        // ==================== SEARCH FUNCTIONS ====================
+        async function search(query, append = false) {
+            if (!query.trim()) return;
+            if (isLoading) return;
+
+            const startTime = performance.now();
+            
+            if (!append) {
+                allResults = [];
+                filteredResults = [];
+                displayedCount = 0;
+                currentPage = 1;
+                hasMoreResults = true;
+                showLoading();
+            }
+
+            isLoading = true;
+
+            // Build query params - only use q and nature_juridique for API
+            const params = new URLSearchParams({
+                q: query,
+                page: currentPage,
+                per_page: API_PER_PAGE,
+                nature_juridique: NATURE_JURIDIQUE_ASSO
+            });
+
+            try {
+                const response = await fetch(`${API_BASE}/search?${params}`);
+                const data = await response.json();
+
+                const endTime = performance.now();
+                document.getElementById('response-time').textContent = Math.round(endTime - startTime);
+
+                const newResults = data.results || [];
+                allResults = append ? [...allResults, ...newResults] : newResults;
+                totalApiResults = data.total_results || 0;
+                
+                // Check if more results available from API
+                hasMoreResults = allResults.length < totalApiResults;
+                currentPage++;
+
+                // Apply local filters
+                applyLocalFilters();
+
+                lastQuery = query;
+            } catch (error) {
+                console.error('Search error:', error);
+                showError();
+            } finally {
+                isLoading = false;
+            }
+        }
+
+        async function loadMoreFromApi() {
+            if (!hasMoreResults || isLoading) return;
+            await search(lastQuery, true);
+        }
+
+        function applyLocalFilters() {
+            const dept = document.getElementById('filter-dept').value;
+            const cp = document.getElementById('filter-cp').value.trim();
+            const ville = document.getElementById('filter-ville').value.trim().toLowerCase();
+            const status = document.getElementById('filter-status').value;
+            const effectif = document.getElementById('filter-effectif').value;
+
+            // Check if any filter is active
+            const hasActiveFilters = dept || cp || ville || status || effectif;
+
+            filteredResults = allResults.filter(item => {
+                const siege = item.siege || {};
+
+                // Department filter
+                if (dept && siege.departement !== dept) return false;
+
+                // Postal code filter (starts with)
+                if (cp && (!siege.code_postal || !siege.code_postal.startsWith(cp))) return false;
+
+                // City filter (contains, case insensitive)
+                if (ville && (!siege.libelle_commune || !siege.libelle_commune.toLowerCase().includes(ville))) return false;
+
+                // Status filter
+                if (status && item.etat_administratif !== status) return false;
+
+                // Effectif filter
+                if (effectif) {
+                    const effectifCodes = effectif.split(',');
+                    if (!effectifCodes.includes(item.tranche_effectif_salarie)) return false;
+                }
+
+                return true;
+            });
+
+            // Update display
+            document.getElementById('total-results').textContent = formatNumber(filteredResults.length);
+            document.getElementById('results-count-value').textContent = formatNumber(filteredResults.length);
+
+            // Show filter indicator
+            const filterIndicator = document.getElementById('filter-indicator');
+            if (hasActiveFilters) {
+                const activeCount = [dept, cp, ville, status, effectif].filter(Boolean).length;
+                filterIndicator.innerHTML = `
+                    <span class="filter-active-indicator">
+                        ${activeCount} filtre${activeCount > 1 ? 's' : ''} actif${activeCount > 1 ? 's' : ''}
+                        <button onclick="clearAllFilters()" title="Effacer les filtres">✕</button>
+                    </span>
+                `;
+            } else {
+                filterIndicator.innerHTML = '';
+            }
+
+            // Reset display and show results
+            displayedCount = 0;
+            displayResults();
+        }
+
+        function clearAllFilters() {
+            document.getElementById('filter-dept').value = '';
+            document.getElementById('filter-cp').value = '';
+            document.getElementById('filter-ville').value = '';
+            document.getElementById('filter-status').value = '';
+            document.getElementById('filter-effectif').value = '';
+            applyLocalFilters();
+        }
+
+        async function autocompleteSearch(query) {
+            if (query.length < 2) {
+                autocomplete.classList.remove('active');
+                return;
+            }
+
+            try {
+                const params = new URLSearchParams({
+                    q: query,
+                    per_page: 5,
+                    nature_juridique: NATURE_JURIDIQUE_ASSO
+                });
+
+                const response = await fetch(`${API_BASE}/search?${params}`);
+                const data = await response.json();
+
+                displayAutocomplete(data.results || []);
+            } catch (error) {
+                console.error('Autocomplete error:', error);
+            }
+        }
+
+        // ==================== DISPLAY FUNCTIONS ====================
+        function displayResults() {
+            resultsHeader.classList.remove('hidden');
+
+            if (filteredResults.length === 0 && allResults.length === 0) {
+                resultsContainer.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">🔎</div>
+                        <h3 class="empty-title">Aucun résultat</h3>
+                        <p class="empty-text">Essayez de modifier vos critères de recherche ou d'élargir votre requête.</p>
+                    </div>
+                `;
+                document.getElementById('displayed-info').textContent = '';
+                return;
+            }
+
+            if (filteredResults.length === 0 && allResults.length > 0) {
+                resultsContainer.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">🔍</div>
+                        <h3 class="empty-title">Aucun résultat avec ces filtres</h3>
+                        <p class="empty-text">Essayez de modifier ou supprimer certains filtres pour voir plus de résultats.</p>
+                        <button onclick="clearAllFilters()" style="margin-top: 20px; padding: 12px 24px; background: var(--accent-cyan); border: none; border-radius: 8px; color: var(--bg-deep); font-family: 'Syne', sans-serif; cursor: pointer;">Effacer les filtres</button>
+                    </div>
+                `;
+                document.getElementById('displayed-info').textContent = '';
+                return;
+            }
+
+            // Create grid if not exists
+            let grid = resultsContainer.querySelector('.results-grid');
+            if (!grid || displayedCount === 0) {
+                resultsContainer.innerHTML = '<div class="results-grid" id="results-grid"></div><div id="scroll-sentinel"></div>';
+                grid = document.getElementById('results-grid');
+                displayedCount = 0;
+            }
+
+            // Add next batch of cards
+            const nextBatch = filteredResults.slice(displayedCount, displayedCount + ITEMS_PER_PAGE);
+            
+            nextBatch.forEach((item, index) => {
+                const card = createCardElement(item, displayedCount + index);
+                grid.appendChild(card);
+            });
+
+            displayedCount += nextBatch.length;
+
+            // Update displayed info
+            const displayedInfo = document.getElementById('displayed-info');
+            if (displayedCount < filteredResults.length) {
+                displayedInfo.textContent = `${displayedCount} sur ${filteredResults.length} affichées`;
+            } else if (hasMoreResults) {
+                displayedInfo.textContent = `${displayedCount} affichées • Scroll pour plus`;
+            } else {
+                displayedInfo.textContent = `${displayedCount} affichées`;
+            }
+
+            // Update scroll sentinel
+            const sentinel = document.getElementById('scroll-sentinel');
+            if (sentinel) {
+                if (displayedCount < filteredResults.length || hasMoreResults) {
+                    sentinel.className = '';
+                } else {
+                    sentinel.innerHTML = '<span style="color: var(--text-tertiary); font-size: 12px;">Fin des résultats</span>';
+                }
+            }
+
+            // Setup infinite scroll observer
+            setupInfiniteScroll();
+        }
+
+        function createCardElement(item, index) {
+            const siege = item.siege || {};
+            const isActive = item.etat_administratif === 'A';
+            const initial = (item.nom_complet || 'A')[0].toUpperCase();
+            const delay = (index % ITEMS_PER_PAGE) * 30;
+
+            const card = document.createElement('article');
+            card.className = 'association-card';
+            card.style.animation = `card-enter 0.4s ease ${delay}ms both`;
+            card.innerHTML = `
+                <div class="card-header">
+                    <div class="card-avatar">${initial}</div>
+                    <div class="card-title-group">
+                        <h3 class="card-name">${escapeHtml(item.nom_complet || 'Sans nom')}</h3>
+                        <span class="card-status ${isActive ? 'active' : 'inactive'}">
+                            <span class="status-dot"></span>
+                            ${isActive ? 'Active' : 'Cessée'}
+                        </span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="card-info-grid">
+                        <div class="info-item">
+                            <span class="info-label">SIREN</span>
+                            <span class="info-value">${item.siren || '---'}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Création</span>
+                            <span class="info-value">${formatDate(item.date_creation) || '---'}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Ville</span>
+                            <span class="info-value">${siege.libelle_commune || '---'}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">CP</span>
+                            <span class="info-value">${siege.code_postal || '---'}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <div class="card-tags">
+                        ${item.section_activite_principale ? `<span class="card-tag">${item.section_activite_principale}</span>` : ''}
+                        ${siege.departement ? `<span class="card-tag">Dép. ${siege.departement}</span>` : ''}
+                    </div>
+                    <button class="card-action" title="Voir les détails">→</button>
+                </div>
+            `;
+
+            card.addEventListener('click', () => openModal(item));
+            return card;
+        }
+
+        function setupInfiniteScroll() {
+            const sentinel = document.getElementById('scroll-sentinel');
+            if (!sentinel) return;
+
+            // Remove previous observer
+            if (window.scrollObserver) {
+                window.scrollObserver.disconnect();
+            }
+
+            window.scrollObserver = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting && !isLoading) {
+                        // First try to display more from filtered results
+                        if (displayedCount < filteredResults.length) {
+                            displayResults();
+                        } 
+                        // Then load more from API if needed and no active filters
+                        else if (hasMoreResults && !hasActiveLocalFilters()) {
+                            sentinel.className = 'loading';
+                            loadMoreFromApi();
+                        }
+                    }
+                });
+            }, {
+                rootMargin: '300px'
+            });
+
+            window.scrollObserver.observe(sentinel);
+        }
+
+        function hasActiveLocalFilters() {
+            return document.getElementById('filter-dept').value ||
+                   document.getElementById('filter-cp').value.trim() ||
+                   document.getElementById('filter-ville').value.trim() ||
+                   document.getElementById('filter-status').value ||
+                   document.getElementById('filter-effectif').value;
+        }
+
+        function displayAutocomplete(results) {
+            if (results.length === 0) {
+                autocomplete.classList.remove('active');
+                return;
+            }
+
+            const html = results.map(item => {
+                const siege = item.siege || {};
+                return `
+                    <div class="autocomplete-item" data-siren="${item.siren}">
+                        <div class="autocomplete-icon">${(item.nom_complet || 'A')[0]}</div>
+                        <div class="autocomplete-text">
+                            <div class="autocomplete-name">${escapeHtml(item.nom_complet || 'Sans nom')}</div>
+                            <div class="autocomplete-info">${siege.libelle_commune || ''} ${siege.code_postal ? `(${siege.code_postal})` : ''}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            autocomplete.innerHTML = html;
+            autocomplete.classList.add('active');
+
+            autocomplete.querySelectorAll('.autocomplete-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const result = results.find(r => r.siren === item.dataset.siren);
+                    if (result) {
+                        searchInput.value = result.nom_complet;
+                        autocomplete.classList.remove('active');
+                        search(result.nom_complet);
+                    }
+                });
+            });
+        }
+
+        function showLoading() {
+            resultsContainer.innerHTML = `
+                <div class="loading-container">
+                    <div class="loading-spinner"></div>
+                    <div class="loading-text">Recherche en cours...</div>
+                </div>
+            `;
+        }
+
+        function showError() {
+            resultsContainer.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon">⚠️</div>
+                    <h3 class="empty-title">Erreur de connexion</h3>
+                    <p class="empty-text">Impossible de contacter le serveur. Vérifiez votre connexion et réessayez.</p>
+                </div>
+            `;
+        }
+
+        // ==================== MODAL ====================
+        function openModal(item) {
+            const siege = item.siege || {};
+            const isActive = item.etat_administratif === 'A';
+
+            document.getElementById('modal-title').textContent = item.nom_complet || 'Association';
+            
+            const statusEl = document.getElementById('modal-status');
+            statusEl.className = `card-status ${isActive ? 'active' : 'inactive'}`;
+            statusEl.innerHTML = `<span class="status-dot"></span>${isActive ? 'Active' : 'Cessée'}`;
+
+            document.getElementById('modal-body').innerHTML = `
+                <div class="detail-section">
+                    <h4 class="detail-title">Identification</h4>
+                    <div class="detail-grid">
+                        <div class="detail-item">
+                            <span class="detail-label">SIREN</span>
+                            <span class="detail-value mono">${item.siren || '---'}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">SIRET (siège)</span>
+                            <span class="detail-value mono">${siege.siret || '---'}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Date de création</span>
+                            <span class="detail-value">${formatDate(item.date_creation) || '---'}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Nature juridique</span>
+                            <span class="detail-value">${item.nature_juridique || '---'}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="detail-section">
+                    <h4 class="detail-title">Adresse du siège</h4>
+                    <div class="detail-grid">
+                        <div class="detail-item" style="grid-column: 1 / -1;">
+                            <span class="detail-label">Adresse complète</span>
+                            <span class="detail-value">${formatAddress(siege)}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Commune</span>
+                            <span class="detail-value">${siege.libelle_commune || '---'}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Code postal</span>
+                            <span class="detail-value">${siege.code_postal || '---'}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Département</span>
+                            <span class="detail-value">${siege.departement || '---'}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Région</span>
+                            <span class="detail-value">${siege.region || '---'}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="detail-section">
+                    <h4 class="detail-title">Activité</h4>
+                    <div class="detail-grid">
+                        <div class="detail-item">
+                            <span class="detail-label">Code NAF</span>
+                            <span class="detail-value mono">${item.activite_principale || siege.activite_principale || '---'}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Section d'activité</span>
+                            <span class="detail-value">${item.section_activite_principale || '---'}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Effectif</span>
+                            <span class="detail-value">${formatEffectif(item.tranche_effectif_salarie) || '---'}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Nb. établissements</span>
+                            <span class="detail-value">${item.nombre_etablissements || '---'}</span>
+                        </div>
+                    </div>
+                </div>
+
+                ${item.dirigeants && item.dirigeants.length > 0 ? `
+                <div class="detail-section">
+                    <h4 class="detail-title">Dirigeants</h4>
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        ${item.dirigeants.slice(0, 3).map(d => `
+                            <div style="padding: 12px; background: var(--bg-surface); border-radius: 8px;">
+                                <div style="font-weight: 500;">${d.prenom || ''} ${d.nom || ''}</div>
+                                <div style="font-size: 12px; color: var(--text-tertiary); margin-top: 4px;">${d.qualite || d.fonction || ''}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                ` : ''}
+            `;
+
+            document.getElementById('modal-link').href = `https://annuaire-entreprises.data.gouv.fr/association/${item.siren}`;
+
+            modalOverlay.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal() {
+            modalOverlay.classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        // ==================== UTILITIES ====================
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function formatNumber(num) {
+            if (!num) return '0';
+            return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return null;
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('fr-FR', { year: 'numeric', month: 'short', day: 'numeric' });
+        }
+
+        function formatAddress(siege) {
+            const parts = [];
+            if (siege.numero_voie) parts.push(siege.numero_voie);
+            if (siege.type_voie) parts.push(siege.type_voie);
+            if (siege.libelle_voie) parts.push(siege.libelle_voie);
+            if (parts.length === 0 && siege.adresse) return siege.adresse;
+            if (parts.length === 0) return '---';
+            return parts.join(' ');
+        }
+
+        function formatEffectif(code) {
+            const mapping = {
+                '00': '0 salarié',
+                '01': '1-2 salariés',
+                '02': '3-5 salariés',
+                '03': '6-9 salariés',
+                '11': '10-19 salariés',
+                '12': '20-49 salariés',
+                '21': '50-99 salariés',
+                '22': '100-199 salariés',
+                '31': '200-249 salariés',
+                '32': '250-499 salariés',
+                '41': '500-999 salariés',
+                '42': '1000-1999 salariés',
+                '51': '2000-4999 salariés',
+                '52': '5000-9999 salariés',
+                '53': '10000+ salariés'
+            };
+            return mapping[code] || null;
+        }
+
+        // ==================== EVENT LISTENERS ====================
+        // Search input
+        searchInput.addEventListener('input', (e) => {
+            clearTimeout(searchTimeout);
+            const query = e.target.value;
+            
+            if (query.length >= 2) {
+                searchTimeout = setTimeout(() => autocompleteSearch(query), 300);
+            } else {
+                autocomplete.classList.remove('active');
+            }
+        });
+
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                autocomplete.classList.remove('active');
+                search(searchInput.value);
+            }
+            if (e.key === 'Escape') {
+                autocomplete.classList.remove('active');
+            }
+        });
+
+        // Search button
+        searchBtn.addEventListener('click', () => {
+            autocomplete.classList.remove('active');
+            search(searchInput.value);
+        });
+
+        // Close autocomplete on click outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.search-container')) {
+                autocomplete.classList.remove('active');
+            }
+        });
+
+        // Advanced toggle
+        advancedToggle.addEventListener('click', () => {
+            advancedToggle.classList.toggle('open');
+            advancedPanel.classList.toggle('open');
+        });
+
+        // Advanced filters - local filtering only (no HTTP request)
+        const filterElements = ['filter-dept', 'filter-cp', 'filter-ville', 'filter-status', 'filter-effectif'];
+        filterElements.forEach(id => {
+            const el = document.getElementById(id);
+            el.addEventListener('change', () => {
+                if (allResults.length > 0) {
+                    applyLocalFilters();
+                }
+            });
+            // Also handle input for text fields
+            if (el.tagName === 'INPUT') {
+                el.addEventListener('input', debounce(() => {
+                    if (allResults.length > 0) {
+                        applyLocalFilters();
+                    }
+                }, 300));
+            }
+        });
+
+        // Debounce helper
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        // Quick filters
+        document.querySelectorAll('.quick-filter').forEach(btn => {
+            btn.addEventListener('click', () => {
+                btn.classList.toggle('active');
+                const filter = btn.dataset.filter;
+                const currentValue = searchInput.value;
+                
+                if (btn.classList.contains('active')) {
+                    searchInput.value = currentValue ? `${currentValue} ${filter}` : filter;
+                } else {
+                    searchInput.value = currentValue.replace(new RegExp(`\\s*${filter}\\s*`, 'g'), ' ').trim();
+                }
+                
+                if (searchInput.value) {
+                    search(searchInput.value);
+                }
+            });
+        });
+
+        // Modal close
+        document.getElementById('modal-close').addEventListener('click', closeModal);
+        document.getElementById('modal-close-btn').addEventListener('click', closeModal);
+        modalOverlay.addEventListener('click', (e) => {
+            if (e.target === modalOverlay) closeModal();
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeModal();
+        });
+
+        // CSS for card animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes card-enter {
+                from {
+                    opacity: 0;
+                    transform: translateY(30px) scale(0.95);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateY(0) scale(1);
+                }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Focus search on load
+        searchInput.focus();
+    </script>
+</body>
+</html>

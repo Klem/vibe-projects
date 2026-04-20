@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WebRTC Video Chat</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@300;500;700&display=swap');
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #13131a;
+    --border: #1e1e2a;
+    --accent: #6ee7b7;
+    --accent-dim: #2a3f35;
+    --text: #e4e4eb;
+    --text-dim: #6b6b80;
+    --danger: #f87171;
+    --glow: rgba(110, 231, 183, 0.15);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Outfit', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(ellipse at 20% 0%, rgba(110,231,183,0.06) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 100%, rgba(99,102,241,0.04) 0%, transparent 60%);
+    pointer-events: none; z-index: 0;
+  }
+
+  header {
+    position: relative; z-index: 1;
+    padding: 1.5rem 2rem;
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .logo {
+    font-weight: 700; font-size: 1.3rem;
+    letter-spacing: -0.03em;
+    display: flex; align-items: center; gap: .6rem;
+  }
+
+  .logo .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 12px var(--accent);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: .5; transform: scale(.8); }
+  }
+
+  .status-bar {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .75rem; color: var(--text-dim);
+    display: flex; align-items: center; gap: .5rem;
+  }
+
+  .status-bar .peer-count {
+    background: var(--accent-dim);
+    color: var(--accent);
+    padding: 2px 10px; border-radius: 100px;
+    font-weight: 600;
+  }
+
+  main {
+    position: relative; z-index: 1;
+    max-width: 1400px; margin: 0 auto;
+    padding: 1.5rem;
+  }
+
+  /* ── Panels ── */
+  .panels {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 1.5rem;
+    min-height: calc(100vh - 120px);
+  }
+
+  @media (max-width: 900px) {
+    .panels { grid-template-columns: 1fr; }
+  }
+
+  /* ── Video Grid ── */
+  .video-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    align-content: start;
+  }
+
+  .video-tile {
+    position: relative;
+    border-radius: 14px;
+    overflow: hidden;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    aspect-ratio: 16/10;
+    transition: border-color .3s, box-shadow .3s;
+  }
+
+  .video-tile.local {
+    border-color: var(--accent);
+    box-shadow: 0 0 20px var(--glow);
+  }
+
+  .video-tile video {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+    background: #000;
+  }
+
+  .video-label {
+    position: absolute; bottom: .6rem; left: .8rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .7rem;
+    background: rgba(0,0,0,.65);
+    backdrop-filter: blur(8px);
+    padding: 3px 10px; border-radius: 6px;
+    color: var(--text); letter-spacing: .03em;
+  }
+
+  .video-tile.local .video-label { color: var(--accent); }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+
+  .sidebar-header {
+    padding: 1.2rem 1.4rem;
+    border-bottom: 1px solid var(--border);
+    font-weight: 600; font-size: .95rem;
+    letter-spacing: -0.02em;
+  }
+
+  .sidebar-content {
+    flex: 1; overflow-y: auto;
+    padding: 1rem 1.2rem;
+  }
+
+  /* ── Connection Section ── */
+  .section-title {
+    font-size: .7rem;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    color: var(--text-dim);
+    margin-bottom: .8rem;
+    font-weight: 600;
+  }
+
+  .my-id-box {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: .8rem 1rem;
+    margin-bottom: 1.2rem;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+
+  .my-id-box code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .8rem;
+    color: var(--accent);
+    user-select: all;
+  }
+
+  .copy-btn {
+    background: none; border: none; cursor: pointer;
+    color: var(--text-dim); font-size: .85rem;
+    transition: color .2s;
+  }
+  .copy-btn:hover { color: var(--accent); }
+
+  .connect-row {
+    display: flex; gap: .5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .connect-row input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: .6rem .8rem;
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .8rem;
+    outline: none;
+    transition: border-color .2s;
+  }
+  .connect-row input:focus { border-color: var(--accent); }
+
+  .btn {
+    background: var(--accent);
+    color: var(--bg);
+    border: none; border-radius: 8px;
+    padding: .6rem 1rem;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 600; font-size: .8rem;
+    cursor: pointer;
+    transition: transform .15s, opacity .2s;
+    white-space: nowrap;
+  }
+  .btn:hover { opacity: .85; }
+  .btn:active { transform: scale(.96); }
+
+  .btn.danger { background: var(--danger); }
+
+  /* ── Log ── */
+  .log {
+    margin-top: auto;
+    border-top: 1px solid var(--border);
+    padding: 1rem 1.2rem;
+    max-height: 180px;
+    overflow-y: auto;
+  }
+
+  .log-entry {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .7rem;
+    color: var(--text-dim);
+    padding: 2px 0;
+    line-height: 1.5;
+  }
+
+  .log-entry .time { color: var(--accent); margin-right: .4rem; }
+
+  /* ── Empty state ── */
+  .empty-state {
+    grid-column: 1 / -1;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    text-align: center; gap: 1rem;
+    padding: 4rem 2rem;
+    color: var(--text-dim);
+  }
+
+  .empty-state svg { opacity: .3; }
+
+  .empty-state p {
+    max-width: 320px;
+    font-size: .9rem; line-height: 1.6;
+  }
+
+  /* ── Explanation section ── */
+  .explanation {
+    position: relative; z-index: 1;
+    max-width: 1400px; margin: 2rem auto;
+    padding: 0 1.5rem 3rem;
+  }
+
+  .explanation details {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+
+  .explanation summary {
+    padding: 1.2rem 1.5rem;
+    cursor: pointer;
+    font-weight: 600;
+    list-style: none;
+    display: flex; align-items: center; gap: .6rem;
+  }
+
+  .explanation summary::before {
+    content: '▸';
+    transition: transform .2s;
+  }
+  .explanation details[open] summary::before {
+    transform: rotate(90deg);
+  }
+
+  .explanation .expl-body {
+    padding: 0 1.5rem 1.5rem;
+    font-size: .9rem; line-height: 1.7;
+    color: var(--text-dim);
+  }
+
+  .explanation .expl-body h3 {
+    color: var(--text);
+    font-size: .95rem;
+    margin: 1.2rem 0 .4rem;
+  }
+
+  .explanation .expl-body code {
+    font-family: 'JetBrains Mono', monospace;
+    background: var(--bg); padding: 1px 6px;
+    border-radius: 4px; font-size: .8rem;
+    color: var(--accent);
+  }
+
+  .step-list {
+    counter-reset: step;
+    list-style: none; padding: 0;
+  }
+
+  .step-list li {
+    counter-increment: step;
+    padding: .4rem 0 .4rem 2.2rem;
+    position: relative;
+  }
+
+  .step-list li::before {
+    content: counter(step);
+    position: absolute; left: 0; top: .4rem;
+    width: 1.5rem; height: 1.5rem;
+    background: var(--accent-dim);
+    color: var(--accent);
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .7rem; font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <span class="dot"></span>
+    WebRTC Mesh Chat
+  </div>
+  <div class="status-bar">
+    <span>peers connectés :</span>
+    <span class="peer-count" id="peerCount">0</span>
+  </div>
+</header>
+
+<main>
+  <div class="panels">
+    <div class="video-grid" id="videoGrid">
+      <div class="empty-state" id="emptyState">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M15.75 10.5l4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9A2.25 2.25 0 0 0 13.5 5.25h-9A2.25 2.25 0 0 0 2.25 7.5v9A2.25 2.25 0 0 0 4.5 18.75z"/>
+        </svg>
+        <p>Démarrez votre caméra, puis partagez votre ID ou entrez celui d'un pair pour vous connecter.</p>
+      </div>
+    </div>
+
+    <div class="sidebar">
+      <div class="sidebar-header">Connexion</div>
+      <div class="sidebar-content">
+
+        <div class="section-title">Mon ID</div>
+        <div class="my-id-box">
+          <code id="myId">initialisation…</code>
+          <button class="copy-btn" onclick="copyId()" title="Copier">📋</button>
+        </div>
+
+        <div class="section-title">Rejoindre un pair</div>
+        <div class="connect-row">
+          <input type="text" id="remoteId" placeholder="ID du pair…" />
+          <button class="btn" onclick="connectToPeer()">Appeler</button>
+        </div>
+
+        <div class="section-title">Contrôles</div>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+          <button class="btn" onclick="startLocalStream()">📷 Démarrer caméra</button>
+          <button class="btn danger" onclick="hangUp()">✕ Raccrocher</button>
+        </div>
+
+      </div>
+      <div class="log" id="log"></div>
+    </div>
+  </div>
+</main>
+
+<div class="explanation">
+  <details>
+    <summary>Comment ça fonctionne — Architecture WebRTC</summary>
+    <div class="expl-body">
+      <h3>1. Signalisation (Signaling)</h3>
+      <p>
+        WebRTC ne définit <strong>pas</strong> de protocole de signalisation.
+        Il faut un canal tiers pour échanger les métadonnées de connexion.
+        Ici on utilise <code>PeerJS</code> qui fournit un serveur de signalisation gratuit.
+        En production, on utiliserait un WebSocket maison ou Firebase.
+      </p>
+
+      <h3>2. Négociation de connexion</h3>
+      <ol class="step-list">
+        <li>Le pair A crée une <strong>offre SDP</strong> (<code>RTCPeerConnection.createOffer()</code>) décrivant ses codecs, résolutions, etc.</li>
+        <li>Cette offre est envoyée via le serveur de signalisation au pair B.</li>
+        <li>Le pair B crée une <strong>réponse SDP</strong> (<code>createAnswer()</code>).</li>
+        <li>En parallèle, chaque pair récolte des <strong>candidats ICE</strong> — des chemins réseau possibles (IP locale, IP publique via STUN, relai via TURN).</li>
+        <li>Une fois qu'un chemin fonctionne, la connexion P2P est établie.</li>
+      </ol>
+
+      <h3>3. Topologie Mesh</h3>
+      <p>
+        Avec N participants, chaque pair maintient N-1 connexions directes.
+        Cela donne <code>N×(N-1)/2</code> connexions au total.
+        Ça fonctionne bien jusqu'à ~5-6 personnes. Au-delà, il faut un <strong>SFU</strong>
+        (Selective Forwarding Unit) comme Mediasoup ou Janus qui centralise les flux.
+      </p>
+
+      <h3>4. STUN & TURN</h3>
+      <p>
+        <strong>STUN</strong> permet de découvrir son IP publique (traversée NAT).
+        <strong>TURN</strong> est un serveur relai utilisé quand le P2P direct échoue
+        (réseaux restrictifs, pare-feu symétriques). Google fournit des serveurs STUN gratuits,
+        mais les serveurs TURN coûtent de la bande passante.
+      </p>
+
+      <h3>5. Limites de cette démo</h3>
+      <p>
+        Cette page utilise le serveur PeerJS public (gratuit, non garanti).
+        La connexion est manuelle (copier/coller d'ID). En production, on automatiserait
+        la découverte des pairs avec une "room" côté serveur.
+        Il n'y a pas non plus de serveur TURN ici — si les deux pairs sont derrière
+        des NAT symétriques, la connexion peut échouer.
+      </p>
+    </div>
+  </details>
+</div>
+
+<script>
+  // ── State ──
+  let peer = null;
+  let localStream = null;
+  const connections = new Map(); // peerId → { call, videoEl }
+
+  // ── Logging ──
+  function log(msg) {
+    const el = document.getElementById('log');
+    const t = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    el.innerHTML += `<div class="log-entry"><span class="time">${t}</span>${msg}</div>`;
+    el.scrollTop = el.scrollHeight;
+  }
+
+  // ── Init PeerJS ──
+  function initPeer() {
+    // PeerJS utilise le serveur public de signalisation par défaut
+    // + les serveurs STUN de Google pour la découverte ICE
+    peer = new Peer(undefined, {
+      config: {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' }
+        ]
+      }
+    });
+
+    peer.on('open', (id) => {
+      document.getElementById('myId').textContent = id;
+      log(`Connecté au serveur de signalisation`);
+    });
+
+    // Quand un pair nous appelle
+    peer.on('call', (call) => {
+      log(`Appel entrant de <b>${call.peer.slice(0,8)}…</b>`);
+      if (!localStream) {
+        log(`⚠ Caméra non démarrée — démarrage auto…`);
+        startLocalStream().then(() => {
+          call.answer(localStream);
+          handleCall(call);
+        });
+      } else {
+        call.answer(localStream);
+        handleCall(call);
+      }
+    });
+
+    peer.on('error', (err) => {
+      log(`❌ Erreur : ${err.type}`);
+    });
+  }
+
+  // ── Local Camera ──
+  async function startLocalStream() {
+    if (localStream) return;
+    try {
+      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      addVideoTile('local', localStream, 'Vous (local)', true);
+      log('📷 Caméra démarrée');
+    } catch (e) {
+      log(`❌ Accès caméra refusé : ${e.message}`);
+    }
+  }
+
+  // ── Connect to peer ──
+  function connectToPeer() {
+    const remoteId = document.getElementById('remoteId').value.trim();
+    if (!remoteId) return;
+    if (!localStream) {
+      log('⚠ Démarrez la caméra d\'abord');
+      return;
+    }
+    if (connections.has(remoteId)) {
+      log('Déjà connecté à ce pair');
+      return;
+    }
+
+    log(`Appel sortant vers <b>${remoteId.slice(0,8)}…</b>`);
+    const call = peer.call(remoteId, localStream);
+    handleCall(call);
+    document.getElementById('remoteId').value = '';
+  }
+
+  // ── Handle a call (incoming or outgoing) ──
+  function handleCall(call) {
+    call.on('stream', (remoteStream) => {
+      if (connections.has(call.peer)) return; // already handled
+      const el = addVideoTile(call.peer, remoteStream, call.peer.slice(0,8) + '…');
+      connections.set(call.peer, { call, videoEl: el });
+      updatePeerCount();
+      log(`✅ Flux reçu de <b>${call.peer.slice(0,8)}…</b>`);
+    });
+
+    call.on('close', () => {
+      removeVideoTile(call.peer);
+      connections.delete(call.peer);
+      updatePeerCount();
+      log(`Pair <b>${call.peer.slice(0,8)}…</b> déconnecté`);
+    });
+
+    call.on('error', (err) => {
+      log(`❌ Erreur appel : ${err}`);
+    });
+  }
+
+  // ── Video tiles ──
+  function addVideoTile(id, stream, label, isLocal = false) {
+    const empty = document.getElementById('emptyState');
+    if (empty) empty.remove();
+
+    const tile = document.createElement('div');
+    tile.className = 'video-tile' + (isLocal ? ' local' : '');
+    tile.id = 'tile-' + id;
+
+    const video = document.createElement('video');
+    video.srcObject = stream;
+    video.autoplay = true;
+    video.playsInline = true;
+    if (isLocal) video.muted = true; // éviter le larsen
+
+    const lbl = document.createElement('div');
+    lbl.className = 'video-label';
+    lbl.textContent = label;
+
+    tile.appendChild(video);
+    tile.appendChild(lbl);
+    document.getElementById('videoGrid').appendChild(tile);
+    return tile;
+  }
+
+  function removeVideoTile(id) {
+    const tile = document.getElementById('tile-' + id);
+    if (tile) tile.remove();
+    // Re-show empty state if no tiles left (except local)
+    const grid = document.getElementById('videoGrid');
+    if (grid.querySelectorAll('.video-tile:not(.local)').length === 0 && !grid.querySelector('.empty-state')) {
+      // keep local tile visible, no empty state needed
+    }
+  }
+
+  function updatePeerCount() {
+    document.getElementById('peerCount').textContent = connections.size;
+  }
+
+  // ── Hang up ──
+  function hangUp() {
+    connections.forEach(({ call }, peerId) => {
+      call.close();
+      removeVideoTile(peerId);
+    });
+    connections.clear();
+    updatePeerCount();
+    log('Tous les appels terminés');
+  }
+
+  // ── Copy ID ──
+  function copyId() {
+    const id = document.getElementById('myId').textContent;
+    navigator.clipboard.writeText(id).then(() => log('ID copié !'));
+  }
+
+  // ── Boot ──
+  initPeer();
+</script>
+
+</body>
+</html>

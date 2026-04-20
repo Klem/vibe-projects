@@ -1,0 +1,2945 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Atom Visualizer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #0a0a0f;
+            color: #c0c0c8;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        /* Periodic Table Section */
+        .periodic-section {
+            height: 45vh;
+            min-height: 150px;
+            padding: 10px;
+            overflow: auto;
+            border-bottom: none;
+            background: linear-gradient(180deg, #0d0d14 0%, #0a0a0f 100%);
+        }
+
+        /* Resizable Divider */
+        .divider {
+            height: 6px;
+            background: #1a1a25;
+            cursor: ns-resize;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            border-top: 1px solid #2a2a35;
+            border-bottom: 1px solid #2a2a35;
+            transition: background 0.2s;
+        }
+
+        .divider:hover {
+            background: #252535;
+        }
+
+        .divider::after {
+            content: '';
+            width: 40px;
+            height: 2px;
+            background: #3a3a45;
+            border-radius: 1px;
+        }
+
+        .divider:hover::after {
+            background: #4a9eff;
+        }
+
+        .periodic-table {
+            display: grid;
+            grid-template-columns: repeat(18, 1fr);
+            gap: 2px;
+            max-width: 1400px;
+            margin: 0 auto;
+            font-size: 9px;
+        }
+
+        .element {
+            aspect-ratio: 1;
+            min-width: 38px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #2a2a35;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: #12121a;
+            position: relative;
+        }
+
+        .element:hover {
+            border-color: #4a9eff;
+            background: #1a1a28;
+            transform: scale(1.05);
+            z-index: 10;
+        }
+
+        .element.selected {
+            border-color: #4a9eff;
+            box-shadow: 0 0 10px rgba(74, 158, 255, 0.3);
+            background: #1a1a28;
+        }
+
+        .element .number {
+            font-size: 7px;
+            color: #606070;
+            position: absolute;
+            top: 2px;
+            left: 3px;
+        }
+
+        .element .symbol {
+            font-size: 14px;
+            font-weight: bold;
+            color: #e0e0e8;
+        }
+
+        .element .name {
+            font-size: 6px;
+            color: #808090;
+            text-align: center;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            width: 100%;
+            padding: 0 2px;
+        }
+
+        .element.empty {
+            border: none;
+            background: transparent;
+            cursor: default;
+        }
+
+        /* Category colors */
+        .element.alkali { border-left: 2px solid #ff6b6b; }
+        .element.alkaline { border-left: 2px solid #ffa94d; }
+        .element.transition { border-left: 2px solid #4dabf7; }
+        .element.post-transition { border-left: 2px solid #69db7c; }
+        .element.metalloid { border-left: 2px solid #da77f2; }
+        .element.nonmetal { border-left: 2px solid #ffd43b; }
+        .element.halogen { border-left: 2px solid #20c997; }
+        .element.noble { border-left: 2px solid #748ffc; }
+        .element.lanthanide { border-left: 2px solid #f783ac; }
+        .element.actinide { border-left: 2px solid #ff8787; }
+
+        /* 3D Viewer Section */
+        .viewer-section {
+            flex: 1;
+            min-height: 200px;
+            display: flex;
+            position: relative;
+            background: #08080c;
+        }
+
+        /* Subatomic view indicator */
+        .view-mode {
+            position: absolute;
+            top: 20px;
+            right: 300px;
+            background: rgba(15, 15, 22, 0.9);
+            border: 1px solid #2a2a35;
+            padding: 10px 15px;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .view-mode .level {
+            color: #4a9eff;
+        }
+
+        .view-mode .back-btn {
+            background: none;
+            border: 1px solid #3a3a45;
+            color: #808090;
+            padding: 5px 10px;
+            font-family: inherit;
+            font-size: 9px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .view-mode .back-btn:hover {
+            border-color: #4a9eff;
+            color: #4a9eff;
+        }
+
+        .particle-info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(15, 15, 22, 0.9);
+            border: 1px solid #2a2a35;
+            padding: 12px 15px;
+            font-size: 10px;
+            max-width: 250px;
+            display: none;
+        }
+
+        .particle-info h4 {
+            color: #4a9eff;
+            margin-bottom: 8px;
+            font-size: 12px;
+            font-weight: normal;
+        }
+
+        .particle-info p {
+            color: #808090;
+            line-height: 1.6;
+            margin-bottom: 5px;
+        }
+
+        .particle-info .quark-legend {
+            display: flex;
+            gap: 15px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #2a2a35;
+        }
+
+        .particle-info .quark-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .particle-info .quark-color {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .quantum-info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(15, 15, 22, 0.9);
+            border: 1px solid #da77f2;
+            padding: 12px 15px;
+            font-size: 10px;
+            max-width: 280px;
+        }
+
+        .quantum-info h4 {
+            color: #da77f2;
+            margin-bottom: 8px;
+            font-size: 12px;
+            font-weight: normal;
+        }
+
+        .quantum-info p {
+            color: #808090;
+            line-height: 1.6;
+            margin-bottom: 5px;
+        }
+
+        .quantum-info .quark-legend {
+            display: flex;
+            gap: 15px;
+            padding-top: 10px;
+            border-top: 1px solid #2a2a35;
+        }
+
+        .quantum-info .quark-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 9px;
+        }
+
+        .quantum-info .quark-color {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        /* Energy Level Legend */
+        .energy-legend {
+            position: absolute;
+            top: 15px;
+            right: 300px;
+            background: rgba(15, 15, 22, 0.9);
+            border: 1px solid #2a2a35;
+            padding: 10px;
+            font-size: 9px;
+            display: none;
+        }
+
+        .energy-legend h4 {
+            color: #4a9eff;
+            margin-bottom: 8px;
+            font-size: 10px;
+            font-weight: normal;
+        }
+
+        .energy-level-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .energy-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .energy-level-item span {
+            color: #808090;
+        }
+
+        .energy-level-item .ev {
+            margin-left: auto;
+            color: #4a9eff;
+        }
+
+        /* Configuration Builder */
+        .config-builder {
+            position: absolute;
+            bottom: 15px;
+            left: 15px;
+            background: rgba(15, 15, 22, 0.95);
+            border: 1px solid #4a9eff;
+            padding: 15px;
+            width: 320px;
+            display: none;
+        }
+
+        .config-builder h4 {
+            color: #4a9eff;
+            margin-bottom: 10px;
+            font-size: 11px;
+            font-weight: normal;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .config-builder .close-btn {
+            background: none;
+            border: none;
+            color: #808090;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .shell-diagram {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+
+        .shell-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .shell-label {
+            width: 30px;
+            font-size: 10px;
+            color: #808090;
+        }
+
+        .shell-slots {
+            display: flex;
+            gap: 3px;
+            flex-wrap: wrap;
+            flex: 1;
+        }
+
+        .electron-slot {
+            width: 18px;
+            height: 18px;
+            border: 1px solid #3a3a45;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .electron-slot:hover {
+            border-color: #4a9eff;
+        }
+
+        .electron-slot.filled {
+            background: radial-gradient(circle, #ffd43b 30%, transparent 70%);
+            border-color: #ffd43b;
+            box-shadow: 0 0 5px rgba(255, 212, 59, 0.5);
+        }
+
+        .electron-slot.filled::after {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background: #ffd43b;
+            border-radius: 50%;
+        }
+
+        .config-info {
+            font-size: 10px;
+            color: #808090;
+            padding-top: 10px;
+            border-top: 1px solid #2a2a35;
+        }
+
+        .config-info .notation {
+            color: #4a9eff;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+
+        .aufbau-hint {
+            font-size: 9px;
+            color: #606070;
+            margin-top: 8px;
+            font-style: italic;
+        }
+
+        /* Decay Panel */
+        .decay-panel {
+            position: absolute;
+            top: 15px;
+            left: 250px;
+            background: rgba(15, 15, 22, 0.95);
+            border: 1px solid #ff6b6b;
+            padding: 15px;
+            width: 250px;
+            display: none;
+        }
+
+        .decay-panel h4 {
+            color: #ff6b6b;
+            margin-bottom: 10px;
+            font-size: 11px;
+            font-weight: normal;
+        }
+
+        .decay-panel p {
+            font-size: 10px;
+            color: #808090;
+            line-height: 1.5;
+            margin-bottom: 10px;
+        }
+
+        .decay-type {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            background: rgba(255, 107, 107, 0.1);
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .decay-type:hover {
+            background: rgba(255, 107, 107, 0.2);
+        }
+
+        .decay-type .icon {
+            font-size: 16px;
+        }
+
+        .decay-type .info {
+            flex: 1;
+        }
+
+        .decay-type .name {
+            color: #ff6b6b;
+            font-size: 10px;
+        }
+
+        .decay-type .desc {
+            color: #606070;
+            font-size: 8px;
+        }
+
+        .decay-result {
+            padding: 10px;
+            background: rgba(74, 158, 255, 0.1);
+            border: 1px solid #4a9eff;
+            margin-top: 10px;
+            display: none;
+        }
+
+        .decay-result .equation {
+            color: #4a9eff;
+            font-size: 12px;
+            text-align: center;
+            margin-bottom: 5px;
+        }
+
+        .decay-result .explanation {
+            color: #808090;
+            font-size: 9px;
+            text-align: center;
+        }
+
+        /* Bonding Preview */
+        .bonding-panel {
+            position: absolute;
+            bottom: 15px;
+            right: 300px;
+            background: rgba(15, 15, 22, 0.95);
+            border: 1px solid #69db7c;
+            padding: 15px;
+            width: 280px;
+            display: none;
+        }
+
+        .bonding-panel h4 {
+            color: #69db7c;
+            margin-bottom: 10px;
+            font-size: 11px;
+            font-weight: normal;
+        }
+
+        .valence-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #2a2a35;
+        }
+
+        .valence-info .count {
+            font-size: 24px;
+            color: #69db7c;
+        }
+
+        .valence-info .label {
+            font-size: 10px;
+            color: #808090;
+        }
+
+        .bonding-options {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .bond-element {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px;
+            background: rgba(105, 219, 124, 0.1);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .bond-element:hover {
+            background: rgba(105, 219, 124, 0.2);
+        }
+
+        .bond-element .symbol {
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #1a1a28;
+            border: 1px solid #69db7c;
+            font-size: 14px;
+            color: #69db7c;
+        }
+
+        .bond-element .details {
+            flex: 1;
+        }
+
+        .bond-element .name {
+            color: #c0c0c8;
+            font-size: 10px;
+        }
+
+        .bond-element .bond-type {
+            color: #606070;
+            font-size: 8px;
+        }
+
+        .molecule-preview {
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(105, 219, 124, 0.05);
+            border: 1px dashed #3a3a45;
+            text-align: center;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+        }
+
+        .molecule-formula {
+            font-size: 18px;
+            color: #69db7c;
+            margin-bottom: 5px;
+        }
+
+        .molecule-name {
+            font-size: 9px;
+            color: #808090;
+        }
+
+        /* Educational Mode Toggle */
+        .edu-toggle {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+
+        .edu-btn {
+            flex: 1;
+            padding: 6px 4px;
+            background: #12121a;
+            border: 1px solid #2a2a35;
+            color: #606070;
+            font-family: inherit;
+            font-size: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+        }
+
+        .edu-btn:hover {
+            border-color: #4a9eff;
+            color: #808090;
+        }
+
+        .edu-btn.active {
+            border-color: #4a9eff;
+            color: #4a9eff;
+            background: rgba(74, 158, 255, 0.1);
+        }
+
+        /* Radioactive indicator */
+        .radioactive-badge {
+            position: absolute;
+            top: 60px;
+            left: 15px;
+            background: rgba(255, 107, 107, 0.1);
+            border: 1px solid #ff6b6b;
+            padding: 5px 10px;
+            font-size: 9px;
+            color: #ff6b6b;
+            display: none;
+        }
+
+        .radioactive-badge::before {
+            content: '☢ ';
+        }
+
+        .click-hint {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(15, 15, 22, 0.8);
+            border: 1px solid #2a2a35;
+            padding: 8px 15px;
+            font-size: 9px;
+            color: #606070;
+            letter-spacing: 1px;
+        }
+
+        #canvas-container {
+            flex: 1;
+            position: relative;
+        }
+
+        #atom-canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        .element-info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(15, 15, 22, 0.9);
+            border: 1px solid #2a2a35;
+            padding: 15px 20px;
+            min-width: 200px;
+        }
+
+        .element-info h2 {
+            font-size: 24px;
+            color: #4a9eff;
+            margin-bottom: 5px;
+            font-weight: normal;
+        }
+
+        .element-info .full-name {
+            font-size: 14px;
+            color: #808090;
+            margin-bottom: 10px;
+        }
+
+        .element-info .stats {
+            font-size: 11px;
+            line-height: 1.8;
+        }
+
+        .element-info .stats span {
+            color: #4a9eff;
+        }
+
+        /* Control Panel */
+        .control-panel {
+            width: 280px;
+            background: rgba(15, 15, 22, 0.95);
+            border-left: 1px solid #2a2a35;
+            padding: 15px;
+            overflow-y: auto;
+        }
+
+        .control-panel h3 {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: #4a9eff;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #2a2a35;
+        }
+
+        .control-group {
+            margin-bottom: 20px;
+        }
+
+        .control-group label {
+            display: block;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #808090;
+            margin-bottom: 8px;
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        input[type="range"] {
+            flex: 1;
+            -webkit-appearance: none;
+            height: 2px;
+            background: #2a2a35;
+            border-radius: 1px;
+            outline: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 12px;
+            height: 12px;
+            background: #4a9eff;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        .slider-value {
+            font-size: 11px;
+            color: #4a9eff;
+            min-width: 35px;
+            text-align: right;
+        }
+
+        .checkbox-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+        }
+
+        .checkbox-item input {
+            display: none;
+        }
+
+        .checkbox-custom {
+            width: 16px;
+            height: 16px;
+            border: 1px solid #2a2a35;
+            background: #12121a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .checkbox-item input:checked + .checkbox-custom {
+            border-color: #4a9eff;
+            background: rgba(74, 158, 255, 0.2);
+        }
+
+        .checkbox-item input:checked + .checkbox-custom::after {
+            content: '✓';
+            color: #4a9eff;
+            font-size: 10px;
+        }
+
+        .checkbox-label {
+            font-size: 11px;
+            color: #c0c0c8;
+        }
+
+        .color-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-left: auto;
+        }
+
+        .color-proton { background: #ff6b6b; }
+        .color-neutron { background: #4dabf7; }
+        .color-electron { background: #ffd43b; }
+
+        .placeholder {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #404050;
+            font-size: 14px;
+            letter-spacing: 2px;
+        }
+
+        /* Legend */
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 10px;
+            padding: 10px;
+            justify-content: center;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 9px;
+            color: #606070;
+        }
+
+        .legend-color {
+            width: 10px;
+            height: 10px;
+            border-left: 2px solid;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 10px;
+            background: #12121a;
+            border: 1px solid #2a2a35;
+            color: #c0c0c8;
+            font-family: inherit;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 10px;
+        }
+
+        .btn:hover {
+            border-color: #4a9eff;
+            background: #1a1a28;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #0a0a0f;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #2a2a35;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3a3a45;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="periodic-section" id="periodic-section">
+            <div class="legend">
+                <div class="legend-item"><div class="legend-color" style="border-color: #ff6b6b"></div>Alcalins</div>
+                <div class="legend-item"><div class="legend-color" style="border-color: #ffa94d"></div>Alcalino-terreux</div>
+                <div class="legend-item"><div class="legend-color" style="border-color: #4dabf7"></div>Transition</div>
+                <div class="legend-item"><div class="legend-color" style="border-color: #69db7c"></div>Post-transition</div>
+                <div class="legend-item"><div class="legend-color" style="border-color: #da77f2"></div>Métalloïdes</div>
+                <div class="legend-item"><div class="legend-color" style="border-color: #ffd43b"></div>Non-métaux</div>
+                <div class="legend-item"><div class="legend-color" style="border-color: #20c997"></div>Halogènes</div>
+                <div class="legend-item"><div class="legend-color" style="border-color: #748ffc"></div>Gaz nobles</div>
+                <div class="legend-item"><div class="legend-color" style="border-color: #f783ac"></div>Lanthanides</div>
+                <div class="legend-item"><div class="legend-color" style="border-color: #ff8787"></div>Actinides</div>
+            </div>
+            <div class="periodic-table" id="periodic-table"></div>
+        </div>
+        <div class="divider" id="divider"></div>
+        <div class="viewer-section" id="viewer-section">
+            <div id="canvas-container">
+                <div class="placeholder" id="placeholder">← SÉLECTIONNEZ UN ÉLÉMENT</div>
+                <canvas id="atom-canvas"></canvas>
+                <div class="element-info" id="element-info" style="display: none;">
+                    <h2 id="info-symbol">H</h2>
+                    <div class="full-name" id="info-name">Hydrogène</div>
+                    <div class="stats">
+                        <div>Numéro atomique: <span id="info-number">1</span></div>
+                        <div>Masse atomique: <span id="info-mass">1.008</span></div>
+                        <div>Protons: <span id="info-protons">1</span></div>
+                        <div>Neutrons: <span id="info-neutrons">0</span></div>
+                        <div>Électrons: <span id="info-electrons">1</span></div>
+                        <div>Configuration: <span id="info-config">1s¹</span></div>
+                    </div>
+                </div>
+                <div class="view-mode" id="view-mode" style="display: none;">
+                    <span>Niveau: <span class="level" id="view-level">Atome</span></span>
+                    <button class="back-btn" id="back-btn">← Retour</button>
+                </div>
+                <div class="particle-info" id="particle-info">
+                    <h4 id="particle-title">Proton</h4>
+                    <p id="particle-desc">Composé de 3 quarks liés par des gluons.</p>
+                    <div class="quark-legend">
+                        <div class="quark-item">
+                            <div class="quark-color" style="background: #ff6b9d;"></div>
+                            <span>Up</span>
+                        </div>
+                        <div class="quark-item">
+                            <div class="quark-color" style="background: #4ecdc4;"></div>
+                            <span>Down</span>
+                        </div>
+                        <div class="quark-item">
+                            <div class="quark-color" style="background: #ffe66d;"></div>
+                            <span>Gluon</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="quantum-info" id="quantum-info" style="display: none;">
+                    <h4>Champ Quantique</h4>
+                    <p>Au niveau le plus fondamental, la matière émerge d'excitations de champs quantiques. Les fluctuations du vide créent des paires particule-antiparticule virtuelles.</p>
+                    <div class="quark-legend" style="margin-top: 12px;">
+                        <div class="quark-item">
+                            <div class="quark-color" style="background: #da77f2;"></div>
+                            <span>Champ</span>
+                        </div>
+                        <div class="quark-item">
+                            <div class="quark-color" style="background: #ffffff;"></div>
+                            <span>Particule</span>
+                        </div>
+                        <div class="quark-item">
+                            <div class="quark-color" style="background: #ff6b6b;"></div>
+                            <span>Anti</span>
+                        </div>
+                    </div>
+                    <p style="margin-top: 10px; font-size: 9px; color: #606070;">Les cordes vibrantes (théorie des cordes) pourraient être le niveau ultime de la réalité.</p>
+                </div>
+                <div class="click-hint" id="click-hint" style="display: none;">Cliquez sur un proton ou neutron pour voir les quarks</div>
+                
+                <!-- Energy Level Legend -->
+                <div class="energy-legend" id="energy-legend">
+                    <h4>Niveaux d'énergie</h4>
+                    <div class="energy-level-item">
+                        <div class="energy-color" style="background: #ff6b6b;"></div>
+                        <span>n=1 (K)</span>
+                        <span class="ev">-13.6 eV</span>
+                    </div>
+                    <div class="energy-level-item">
+                        <div class="energy-color" style="background: #ffa94d;"></div>
+                        <span>n=2 (L)</span>
+                        <span class="ev">-3.4 eV</span>
+                    </div>
+                    <div class="energy-level-item">
+                        <div class="energy-color" style="background: #ffd43b;"></div>
+                        <span>n=3 (M)</span>
+                        <span class="ev">-1.5 eV</span>
+                    </div>
+                    <div class="energy-level-item">
+                        <div class="energy-color" style="background: #69db7c;"></div>
+                        <span>n=4 (N)</span>
+                        <span class="ev">-0.85 eV</span>
+                    </div>
+                    <div class="energy-level-item">
+                        <div class="energy-color" style="background: #4dabf7;"></div>
+                        <span>n=5 (O)</span>
+                        <span class="ev">-0.54 eV</span>
+                    </div>
+                    <div class="energy-level-item">
+                        <div class="energy-color" style="background: #da77f2;"></div>
+                        <span>n=6 (P)</span>
+                        <span class="ev">-0.38 eV</span>
+                    </div>
+                    <div class="energy-level-item">
+                        <div class="energy-color" style="background: #f783ac;"></div>
+                        <span>n=7 (Q)</span>
+                        <span class="ev">-0.28 eV</span>
+                    </div>
+                </div>
+
+                <!-- Configuration Builder -->
+                <div class="config-builder" id="config-builder">
+                    <h4>
+                        Constructeur de configuration
+                        <button class="close-btn" id="close-config">×</button>
+                    </h4>
+                    <div class="shell-diagram" id="shell-diagram">
+                        <!-- Generated by JS -->
+                    </div>
+                    <div class="config-info">
+                        <div>Électrons placés: <span id="placed-electrons">0</span> / <span id="total-electrons">0</span></div>
+                        <div class="notation" id="config-notation">1s⁰</div>
+                        <div class="aufbau-hint">Règle de Aufbau: remplir les niveaux d'énergie les plus bas en premier (1s → 2s → 2p → 3s → ...)</div>
+                    </div>
+                    <button class="btn" id="reset-config" style="margin-top: 10px;">Réinitialiser</button>
+                    <button class="btn" id="auto-fill-config">Remplissage automatique</button>
+                </div>
+
+                <!-- Decay Panel -->
+                <div class="decay-panel" id="decay-panel">
+                    <h4>☢ Désintégration radioactive</h4>
+                    <p id="decay-intro">Cet élément est instable et peut se désintégrer de plusieurs façons:</p>
+                    <div class="decay-type" id="alpha-decay" data-type="alpha">
+                        <span class="icon">α</span>
+                        <div class="info">
+                            <div class="name">Désintégration Alpha</div>
+                            <div class="desc">Émet un noyau d'hélium (2p + 2n)</div>
+                        </div>
+                    </div>
+                    <div class="decay-type" id="beta-minus-decay" data-type="beta-minus">
+                        <span class="icon">β⁻</span>
+                        <div class="info">
+                            <div class="name">Désintégration Bêta-</div>
+                            <div class="desc">Un neutron → proton + électron</div>
+                        </div>
+                    </div>
+                    <div class="decay-type" id="beta-plus-decay" data-type="beta-plus">
+                        <span class="icon">β⁺</span>
+                        <div class="info">
+                            <div class="name">Désintégration Bêta+</div>
+                            <div class="desc">Un proton → neutron + positron</div>
+                        </div>
+                    </div>
+                    <div class="decay-result" id="decay-result">
+                        <div class="equation" id="decay-equation"></div>
+                        <div class="explanation" id="decay-explanation"></div>
+                    </div>
+                </div>
+
+                <!-- Bonding Preview -->
+                <div class="bonding-panel" id="bonding-panel">
+                    <h4>🔗 Liaisons chimiques</h4>
+                    <div class="valence-info">
+                        <div>
+                            <div class="count" id="valence-count">0</div>
+                            <div class="label">Électrons de valence</div>
+                        </div>
+                        <div>
+                            <div class="count" id="bonds-possible">0</div>
+                            <div class="label">Liaisons possibles</div>
+                        </div>
+                    </div>
+                    <div class="bonding-options" id="bonding-options">
+                        <!-- Generated by JS -->
+                    </div>
+                    <div class="molecule-preview" id="molecule-preview">
+                        <span style="color: #606070; font-size: 10px;">Sélectionnez un élément ci-dessus</span>
+                    </div>
+                </div>
+
+                <!-- Radioactive Badge -->
+                <div class="radioactive-badge" id="radioactive-badge">Élément radioactif</div>
+            </div>
+            <div class="control-panel">
+                <h3>Contrôles</h3>
+                
+                <div class="control-group">
+                    <label>Mode éducatif</label>
+                    <div class="edu-toggle">
+                        <button class="edu-btn" id="toggle-energy" title="Niveaux d'énergie">Énergie</button>
+                        <button class="edu-btn" id="toggle-config" title="Constructeur de configuration">Config</button>
+                        <button class="edu-btn" id="toggle-decay" title="Désintégration">Decay</button>
+                        <button class="edu-btn" id="toggle-bonding" title="Liaisons">Liaison</button>
+                    </div>
+                </div>
+                
+                <div class="control-group">
+                    <label>Vitesse d'animation</label>
+                    <div class="slider-container">
+                        <input type="range" id="speed" min="0.1" max="3" step="0.1" value="1">
+                        <span class="slider-value" id="speed-value">1.0x</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>Longueur des traînées</label>
+                    <div class="slider-container">
+                        <input type="range" id="trail-length" min="0" max="50" step="1" value="20">
+                        <span class="slider-value" id="trail-value">20</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>Taille du noyau</label>
+                    <div class="slider-container">
+                        <input type="range" id="nucleus-size" min="0.5" max="2" step="0.1" value="1">
+                        <span class="slider-value" id="nucleus-value">1.0x</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>Distance des orbites</label>
+                    <div class="slider-container">
+                        <input type="range" id="orbit-distance" min="0.5" max="2" step="0.1" value="1">
+                        <span class="slider-value" id="orbit-value">1.0x</span>
+                    </div>
+                </div>
+
+                <h3>Affichage</h3>
+                
+                <div class="control-group">
+                    <div class="checkbox-group">
+                        <label class="checkbox-item">
+                            <input type="checkbox" id="show-protons" checked>
+                            <span class="checkbox-custom"></span>
+                            <span class="checkbox-label">Protons</span>
+                            <span class="color-indicator color-proton"></span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" id="show-neutrons" checked>
+                            <span class="checkbox-custom"></span>
+                            <span class="checkbox-label">Neutrons</span>
+                            <span class="color-indicator color-neutron"></span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" id="show-electrons" checked>
+                            <span class="checkbox-custom"></span>
+                            <span class="checkbox-label">Électrons</span>
+                            <span class="color-indicator color-electron"></span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" id="show-orbits" checked>
+                            <span class="checkbox-custom"></span>
+                            <span class="checkbox-label">Orbites</span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" id="show-trails" checked>
+                            <span class="checkbox-custom"></span>
+                            <span class="checkbox-label">Traînées</span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" id="show-glow" checked>
+                            <span class="checkbox-custom"></span>
+                            <span class="checkbox-label">Effet lumineux</span>
+                        </label>
+                    </div>
+                </div>
+
+                <h3>Caméra</h3>
+                
+                <div class="control-group">
+                    <label>Rotation auto</label>
+                    <div class="slider-container">
+                        <input type="range" id="auto-rotate" min="0" max="2" step="0.1" value="0.3">
+                        <span class="slider-value" id="rotate-value">0.3</span>
+                    </div>
+                </div>
+
+                <button class="btn" id="reset-camera">Réinitialiser caméra</button>
+                <button class="btn" id="random-element">Élément aléatoire</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Elements data
+        const elements = [
+            { number: 1, symbol: 'H', name: 'Hydrogène', mass: 1.008, category: 'nonmetal', config: '1s¹' },
+            { number: 2, symbol: 'He', name: 'Hélium', mass: 4.003, category: 'noble', config: '1s²' },
+            { number: 3, symbol: 'Li', name: 'Lithium', mass: 6.941, category: 'alkali', config: '[He] 2s¹' },
+            { number: 4, symbol: 'Be', name: 'Béryllium', mass: 9.012, category: 'alkaline', config: '[He] 2s²' },
+            { number: 5, symbol: 'B', name: 'Bore', mass: 10.81, category: 'metalloid', config: '[He] 2s² 2p¹' },
+            { number: 6, symbol: 'C', name: 'Carbone', mass: 12.01, category: 'nonmetal', config: '[He] 2s² 2p²' },
+            { number: 7, symbol: 'N', name: 'Azote', mass: 14.01, category: 'nonmetal', config: '[He] 2s² 2p³' },
+            { number: 8, symbol: 'O', name: 'Oxygène', mass: 16.00, category: 'nonmetal', config: '[He] 2s² 2p⁴' },
+            { number: 9, symbol: 'F', name: 'Fluor', mass: 19.00, category: 'halogen', config: '[He] 2s² 2p⁵' },
+            { number: 10, symbol: 'Ne', name: 'Néon', mass: 20.18, category: 'noble', config: '[He] 2s² 2p⁶' },
+            { number: 11, symbol: 'Na', name: 'Sodium', mass: 22.99, category: 'alkali', config: '[Ne] 3s¹' },
+            { number: 12, symbol: 'Mg', name: 'Magnésium', mass: 24.31, category: 'alkaline', config: '[Ne] 3s²' },
+            { number: 13, symbol: 'Al', name: 'Aluminium', mass: 26.98, category: 'post-transition', config: '[Ne] 3s² 3p¹' },
+            { number: 14, symbol: 'Si', name: 'Silicium', mass: 28.09, category: 'metalloid', config: '[Ne] 3s² 3p²' },
+            { number: 15, symbol: 'P', name: 'Phosphore', mass: 30.97, category: 'nonmetal', config: '[Ne] 3s² 3p³' },
+            { number: 16, symbol: 'S', name: 'Soufre', mass: 32.07, category: 'nonmetal', config: '[Ne] 3s² 3p⁴' },
+            { number: 17, symbol: 'Cl', name: 'Chlore', mass: 35.45, category: 'halogen', config: '[Ne] 3s² 3p⁵' },
+            { number: 18, symbol: 'Ar', name: 'Argon', mass: 39.95, category: 'noble', config: '[Ne] 3s² 3p⁶' },
+            { number: 19, symbol: 'K', name: 'Potassium', mass: 39.10, category: 'alkali', config: '[Ar] 4s¹' },
+            { number: 20, symbol: 'Ca', name: 'Calcium', mass: 40.08, category: 'alkaline', config: '[Ar] 4s²' },
+            { number: 21, symbol: 'Sc', name: 'Scandium', mass: 44.96, category: 'transition', config: '[Ar] 3d¹ 4s²' },
+            { number: 22, symbol: 'Ti', name: 'Titane', mass: 47.87, category: 'transition', config: '[Ar] 3d² 4s²' },
+            { number: 23, symbol: 'V', name: 'Vanadium', mass: 50.94, category: 'transition', config: '[Ar] 3d³ 4s²' },
+            { number: 24, symbol: 'Cr', name: 'Chrome', mass: 52.00, category: 'transition', config: '[Ar] 3d⁵ 4s¹' },
+            { number: 25, symbol: 'Mn', name: 'Manganèse', mass: 54.94, category: 'transition', config: '[Ar] 3d⁵ 4s²' },
+            { number: 26, symbol: 'Fe', name: 'Fer', mass: 55.85, category: 'transition', config: '[Ar] 3d⁶ 4s²' },
+            { number: 27, symbol: 'Co', name: 'Cobalt', mass: 58.93, category: 'transition', config: '[Ar] 3d⁷ 4s²' },
+            { number: 28, symbol: 'Ni', name: 'Nickel', mass: 58.69, category: 'transition', config: '[Ar] 3d⁸ 4s²' },
+            { number: 29, symbol: 'Cu', name: 'Cuivre', mass: 63.55, category: 'transition', config: '[Ar] 3d¹⁰ 4s¹' },
+            { number: 30, symbol: 'Zn', name: 'Zinc', mass: 65.38, category: 'transition', config: '[Ar] 3d¹⁰ 4s²' },
+            { number: 31, symbol: 'Ga', name: 'Gallium', mass: 69.72, category: 'post-transition', config: '[Ar] 3d¹⁰ 4s² 4p¹' },
+            { number: 32, symbol: 'Ge', name: 'Germanium', mass: 72.63, category: 'metalloid', config: '[Ar] 3d¹⁰ 4s² 4p²' },
+            { number: 33, symbol: 'As', name: 'Arsenic', mass: 74.92, category: 'metalloid', config: '[Ar] 3d¹⁰ 4s² 4p³' },
+            { number: 34, symbol: 'Se', name: 'Sélénium', mass: 78.97, category: 'nonmetal', config: '[Ar] 3d¹⁰ 4s² 4p⁴' },
+            { number: 35, symbol: 'Br', name: 'Brome', mass: 79.90, category: 'halogen', config: '[Ar] 3d¹⁰ 4s² 4p⁵' },
+            { number: 36, symbol: 'Kr', name: 'Krypton', mass: 83.80, category: 'noble', config: '[Ar] 3d¹⁰ 4s² 4p⁶' },
+            { number: 37, symbol: 'Rb', name: 'Rubidium', mass: 85.47, category: 'alkali', config: '[Kr] 5s¹' },
+            { number: 38, symbol: 'Sr', name: 'Strontium', mass: 87.62, category: 'alkaline', config: '[Kr] 5s²' },
+            { number: 39, symbol: 'Y', name: 'Yttrium', mass: 88.91, category: 'transition', config: '[Kr] 4d¹ 5s²' },
+            { number: 40, symbol: 'Zr', name: 'Zirconium', mass: 91.22, category: 'transition', config: '[Kr] 4d² 5s²' },
+            { number: 41, symbol: 'Nb', name: 'Niobium', mass: 92.91, category: 'transition', config: '[Kr] 4d⁴ 5s¹' },
+            { number: 42, symbol: 'Mo', name: 'Molybdène', mass: 95.95, category: 'transition', config: '[Kr] 4d⁵ 5s¹' },
+            { number: 43, symbol: 'Tc', name: 'Technétium', mass: 98, category: 'transition', config: '[Kr] 4d⁵ 5s²' },
+            { number: 44, symbol: 'Ru', name: 'Ruthénium', mass: 101.1, category: 'transition', config: '[Kr] 4d⁷ 5s¹' },
+            { number: 45, symbol: 'Rh', name: 'Rhodium', mass: 102.9, category: 'transition', config: '[Kr] 4d⁸ 5s¹' },
+            { number: 46, symbol: 'Pd', name: 'Palladium', mass: 106.4, category: 'transition', config: '[Kr] 4d¹⁰' },
+            { number: 47, symbol: 'Ag', name: 'Argent', mass: 107.9, category: 'transition', config: '[Kr] 4d¹⁰ 5s¹' },
+            { number: 48, symbol: 'Cd', name: 'Cadmium', mass: 112.4, category: 'transition', config: '[Kr] 4d¹⁰ 5s²' },
+            { number: 49, symbol: 'In', name: 'Indium', mass: 114.8, category: 'post-transition', config: '[Kr] 4d¹⁰ 5s² 5p¹' },
+            { number: 50, symbol: 'Sn', name: 'Étain', mass: 118.7, category: 'post-transition', config: '[Kr] 4d¹⁰ 5s² 5p²' },
+            { number: 51, symbol: 'Sb', name: 'Antimoine', mass: 121.8, category: 'metalloid', config: '[Kr] 4d¹⁰ 5s² 5p³' },
+            { number: 52, symbol: 'Te', name: 'Tellure', mass: 127.6, category: 'metalloid', config: '[Kr] 4d¹⁰ 5s² 5p⁴' },
+            { number: 53, symbol: 'I', name: 'Iode', mass: 126.9, category: 'halogen', config: '[Kr] 4d¹⁰ 5s² 5p⁵' },
+            { number: 54, symbol: 'Xe', name: 'Xénon', mass: 131.3, category: 'noble', config: '[Kr] 4d¹⁰ 5s² 5p⁶' },
+            { number: 55, symbol: 'Cs', name: 'Césium', mass: 132.9, category: 'alkali', config: '[Xe] 6s¹' },
+            { number: 56, symbol: 'Ba', name: 'Baryum', mass: 137.3, category: 'alkaline', config: '[Xe] 6s²' },
+            { number: 57, symbol: 'La', name: 'Lanthane', mass: 138.9, category: 'lanthanide', config: '[Xe] 5d¹ 6s²' },
+            { number: 58, symbol: 'Ce', name: 'Cérium', mass: 140.1, category: 'lanthanide', config: '[Xe] 4f¹ 5d¹ 6s²' },
+            { number: 59, symbol: 'Pr', name: 'Praséodyme', mass: 140.9, category: 'lanthanide', config: '[Xe] 4f³ 6s²' },
+            { number: 60, symbol: 'Nd', name: 'Néodyme', mass: 144.2, category: 'lanthanide', config: '[Xe] 4f⁴ 6s²' },
+            { number: 61, symbol: 'Pm', name: 'Prométhium', mass: 145, category: 'lanthanide', config: '[Xe] 4f⁵ 6s²' },
+            { number: 62, symbol: 'Sm', name: 'Samarium', mass: 150.4, category: 'lanthanide', config: '[Xe] 4f⁶ 6s²' },
+            { number: 63, symbol: 'Eu', name: 'Europium', mass: 152.0, category: 'lanthanide', config: '[Xe] 4f⁷ 6s²' },
+            { number: 64, symbol: 'Gd', name: 'Gadolinium', mass: 157.3, category: 'lanthanide', config: '[Xe] 4f⁷ 5d¹ 6s²' },
+            { number: 65, symbol: 'Tb', name: 'Terbium', mass: 158.9, category: 'lanthanide', config: '[Xe] 4f⁹ 6s²' },
+            { number: 66, symbol: 'Dy', name: 'Dysprosium', mass: 162.5, category: 'lanthanide', config: '[Xe] 4f¹⁰ 6s²' },
+            { number: 67, symbol: 'Ho', name: 'Holmium', mass: 164.9, category: 'lanthanide', config: '[Xe] 4f¹¹ 6s²' },
+            { number: 68, symbol: 'Er', name: 'Erbium', mass: 167.3, category: 'lanthanide', config: '[Xe] 4f¹² 6s²' },
+            { number: 69, symbol: 'Tm', name: 'Thulium', mass: 168.9, category: 'lanthanide', config: '[Xe] 4f¹³ 6s²' },
+            { number: 70, symbol: 'Yb', name: 'Ytterbium', mass: 173.0, category: 'lanthanide', config: '[Xe] 4f¹⁴ 6s²' },
+            { number: 71, symbol: 'Lu', name: 'Lutécium', mass: 175.0, category: 'lanthanide', config: '[Xe] 4f¹⁴ 5d¹ 6s²' },
+            { number: 72, symbol: 'Hf', name: 'Hafnium', mass: 178.5, category: 'transition', config: '[Xe] 4f¹⁴ 5d² 6s²' },
+            { number: 73, symbol: 'Ta', name: 'Tantale', mass: 180.9, category: 'transition', config: '[Xe] 4f¹⁴ 5d³ 6s²' },
+            { number: 74, symbol: 'W', name: 'Tungstène', mass: 183.8, category: 'transition', config: '[Xe] 4f¹⁴ 5d⁴ 6s²' },
+            { number: 75, symbol: 'Re', name: 'Rhénium', mass: 186.2, category: 'transition', config: '[Xe] 4f¹⁴ 5d⁵ 6s²' },
+            { number: 76, symbol: 'Os', name: 'Osmium', mass: 190.2, category: 'transition', config: '[Xe] 4f¹⁴ 5d⁶ 6s²' },
+            { number: 77, symbol: 'Ir', name: 'Iridium', mass: 192.2, category: 'transition', config: '[Xe] 4f¹⁴ 5d⁷ 6s²' },
+            { number: 78, symbol: 'Pt', name: 'Platine', mass: 195.1, category: 'transition', config: '[Xe] 4f¹⁴ 5d⁹ 6s¹' },
+            { number: 79, symbol: 'Au', name: 'Or', mass: 197.0, category: 'transition', config: '[Xe] 4f¹⁴ 5d¹⁰ 6s¹' },
+            { number: 80, symbol: 'Hg', name: 'Mercure', mass: 200.6, category: 'transition', config: '[Xe] 4f¹⁴ 5d¹⁰ 6s²' },
+            { number: 81, symbol: 'Tl', name: 'Thallium', mass: 204.4, category: 'post-transition', config: '[Xe] 4f¹⁴ 5d¹⁰ 6s² 6p¹' },
+            { number: 82, symbol: 'Pb', name: 'Plomb', mass: 207.2, category: 'post-transition', config: '[Xe] 4f¹⁴ 5d¹⁰ 6s² 6p²' },
+            { number: 83, symbol: 'Bi', name: 'Bismuth', mass: 209.0, category: 'post-transition', config: '[Xe] 4f¹⁴ 5d¹⁰ 6s² 6p³' },
+            { number: 84, symbol: 'Po', name: 'Polonium', mass: 209, category: 'metalloid', config: '[Xe] 4f¹⁴ 5d¹⁰ 6s² 6p⁴' },
+            { number: 85, symbol: 'At', name: 'Astate', mass: 210, category: 'halogen', config: '[Xe] 4f¹⁴ 5d¹⁰ 6s² 6p⁵' },
+            { number: 86, symbol: 'Rn', name: 'Radon', mass: 222, category: 'noble', config: '[Xe] 4f¹⁴ 5d¹⁰ 6s² 6p⁶' },
+            { number: 87, symbol: 'Fr', name: 'Francium', mass: 223, category: 'alkali', config: '[Rn] 7s¹' },
+            { number: 88, symbol: 'Ra', name: 'Radium', mass: 226, category: 'alkaline', config: '[Rn] 7s²' },
+            { number: 89, symbol: 'Ac', name: 'Actinium', mass: 227, category: 'actinide', config: '[Rn] 6d¹ 7s²' },
+            { number: 90, symbol: 'Th', name: 'Thorium', mass: 232.0, category: 'actinide', config: '[Rn] 6d² 7s²' },
+            { number: 91, symbol: 'Pa', name: 'Protactinium', mass: 231.0, category: 'actinide', config: '[Rn] 5f² 6d¹ 7s²' },
+            { number: 92, symbol: 'U', name: 'Uranium', mass: 238.0, category: 'actinide', config: '[Rn] 5f³ 6d¹ 7s²' },
+            { number: 93, symbol: 'Np', name: 'Neptunium', mass: 237, category: 'actinide', config: '[Rn] 5f⁴ 6d¹ 7s²' },
+            { number: 94, symbol: 'Pu', name: 'Plutonium', mass: 244, category: 'actinide', config: '[Rn] 5f⁶ 7s²' },
+            { number: 95, symbol: 'Am', name: 'Américium', mass: 243, category: 'actinide', config: '[Rn] 5f⁷ 7s²' },
+            { number: 96, symbol: 'Cm', name: 'Curium', mass: 247, category: 'actinide', config: '[Rn] 5f⁷ 6d¹ 7s²' },
+            { number: 97, symbol: 'Bk', name: 'Berkélium', mass: 247, category: 'actinide', config: '[Rn] 5f⁹ 7s²' },
+            { number: 98, symbol: 'Cf', name: 'Californium', mass: 251, category: 'actinide', config: '[Rn] 5f¹⁰ 7s²' },
+            { number: 99, symbol: 'Es', name: 'Einsteinium', mass: 252, category: 'actinide', config: '[Rn] 5f¹¹ 7s²' },
+            { number: 100, symbol: 'Fm', name: 'Fermium', mass: 257, category: 'actinide', config: '[Rn] 5f¹² 7s²' },
+            { number: 101, symbol: 'Md', name: 'Mendélévium', mass: 258, category: 'actinide', config: '[Rn] 5f¹³ 7s²' },
+            { number: 102, symbol: 'No', name: 'Nobélium', mass: 259, category: 'actinide', config: '[Rn] 5f¹⁴ 7s²' },
+            { number: 103, symbol: 'Lr', name: 'Lawrencium', mass: 266, category: 'actinide', config: '[Rn] 5f¹⁴ 7s² 7p¹' },
+            { number: 104, symbol: 'Rf', name: 'Rutherfordium', mass: 267, category: 'transition', config: '[Rn] 5f¹⁴ 6d² 7s²' },
+            { number: 105, symbol: 'Db', name: 'Dubnium', mass: 268, category: 'transition', config: '[Rn] 5f¹⁴ 6d³ 7s²' },
+            { number: 106, symbol: 'Sg', name: 'Seaborgium', mass: 269, category: 'transition', config: '[Rn] 5f¹⁴ 6d⁴ 7s²' },
+            { number: 107, symbol: 'Bh', name: 'Bohrium', mass: 270, category: 'transition', config: '[Rn] 5f¹⁴ 6d⁵ 7s²' },
+            { number: 108, symbol: 'Hs', name: 'Hassium', mass: 277, category: 'transition', config: '[Rn] 5f¹⁴ 6d⁶ 7s²' },
+            { number: 109, symbol: 'Mt', name: 'Meitnerium', mass: 278, category: 'transition', config: '[Rn] 5f¹⁴ 6d⁷ 7s²' },
+            { number: 110, symbol: 'Ds', name: 'Darmstadtium', mass: 281, category: 'transition', config: '[Rn] 5f¹⁴ 6d⁸ 7s²' },
+            { number: 111, symbol: 'Rg', name: 'Roentgenium', mass: 282, category: 'transition', config: '[Rn] 5f¹⁴ 6d⁹ 7s²' },
+            { number: 112, symbol: 'Cn', name: 'Copernicium', mass: 285, category: 'transition', config: '[Rn] 5f¹⁴ 6d¹⁰ 7s²' },
+            { number: 113, symbol: 'Nh', name: 'Nihonium', mass: 286, category: 'post-transition', config: '[Rn] 5f¹⁴ 6d¹⁰ 7s² 7p¹' },
+            { number: 114, symbol: 'Fl', name: 'Flérovium', mass: 289, category: 'post-transition', config: '[Rn] 5f¹⁴ 6d¹⁰ 7s² 7p²' },
+            { number: 115, symbol: 'Mc', name: 'Moscovium', mass: 290, category: 'post-transition', config: '[Rn] 5f¹⁴ 6d¹⁰ 7s² 7p³' },
+            { number: 116, symbol: 'Lv', name: 'Livermorium', mass: 293, category: 'post-transition', config: '[Rn] 5f¹⁴ 6d¹⁰ 7s² 7p⁴' },
+            { number: 117, symbol: 'Ts', name: 'Tennesse', mass: 294, category: 'halogen', config: '[Rn] 5f¹⁴ 6d¹⁰ 7s² 7p⁵' },
+            { number: 118, symbol: 'Og', name: 'Oganesson', mass: 294, category: 'noble', config: '[Rn] 5f¹⁴ 6d¹⁰ 7s² 7p⁶' }
+        ];
+
+        // Table layout
+        const tableLayout = [
+            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+            [3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 6, 7, 8, 9, 10],
+            [11, 12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 13, 14, 15, 16, 17, 18],
+            [19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36],
+            [37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54],
+            [55, 56, -1, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86],
+            [87, 88, -2, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 0],
+            [0, 0, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 0]
+        ];
+
+        // Electron shell configuration
+        function getElectronShells(atomicNumber) {
+            const shells = [2, 8, 18, 32, 32, 18, 8];
+            const result = [];
+            let remaining = atomicNumber;
+            
+            for (let i = 0; i < shells.length && remaining > 0; i++) {
+                const electrons = Math.min(remaining, shells[i]);
+                result.push(electrons);
+                remaining -= electrons;
+            }
+            
+            return result;
+        }
+
+        // Build periodic table
+        const periodicTable = document.getElementById('periodic-table');
+        let selectedElement = null;
+
+        tableLayout.forEach(row => {
+            row.forEach(num => {
+                const cell = document.createElement('div');
+                cell.className = 'element';
+                
+                if (num === 0) {
+                    cell.classList.add('empty');
+                } else if (num === -1) {
+                    cell.innerHTML = '<span class="symbol" style="font-size:8px">57-71</span>';
+                    cell.classList.add('lanthanide');
+                } else if (num === -2) {
+                    cell.innerHTML = '<span class="symbol" style="font-size:8px">89-103</span>';
+                    cell.classList.add('actinide');
+                } else {
+                    const element = elements.find(e => e.number === num);
+                    if (element) {
+                        cell.innerHTML = `
+                            <span class="number">${element.number}</span>
+                            <span class="symbol">${element.symbol}</span>
+                            <span class="name">${element.name}</span>
+                        `;
+                        cell.classList.add(element.category);
+                        cell.dataset.number = element.number;
+                        
+                        cell.addEventListener('click', () => selectElement(element, cell));
+                    }
+                }
+                
+                periodicTable.appendChild(cell);
+            });
+        });
+
+        // Three.js setup
+        let scene, camera, renderer, controls;
+        let atomGroup, nucleusGroup, subatomicGroup, quantumGroup;
+        let electrons = [];
+        let trails = [];
+        let orbitLines = [];
+        let animationId;
+        let currentElement = null;
+        let viewLevel = 'atom'; // 'atom', 'subatomic', or 'quantum'
+        let selectedParticle = null;
+        let quarks = [];
+        let gluons = [];
+        let quarkTrails = [];
+        let quantumParticles = [];
+        let virtualPairs = [];
+        let fieldLines = [];
+        
+        // Raycaster for clicking particles
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        // Settings
+        const settings = {
+            speed: 1,
+            trailLength: 20,
+            nucleusSize: 1,
+            orbitDistance: 1,
+            showProtons: true,
+            showNeutrons: true,
+            showElectrons: true,
+            showOrbits: true,
+            showTrails: true,
+            showGlow: true,
+            autoRotate: 0.3,
+            showEnergyLevels: false,
+            showConfigBuilder: false,
+            showDecay: false,
+            showBonding: false
+        };
+
+        // Educational state
+        let configBuilderState = [];
+        let decayAnimating = false;
+
+        // Energy level colors (by shell)
+        const shellColors = [0xff6b6b, 0xffa94d, 0xffd43b, 0x69db7c, 0x4dabf7, 0xda77f2, 0xf783ac];
+        const shellNames = ['K', 'L', 'M', 'N', 'O', 'P', 'Q'];
+        const shellCapacities = [2, 8, 18, 32, 32, 18, 8];
+
+        // Radioactive elements (atomic number >= 84 or specific isotopes)
+        const radioactiveElements = [43, 61, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118];
+
+        // Common bonding partners
+        const bondingData = {
+            1: { valence: 1, bonds: 1, partners: [{el: 1, formula: 'H₂', name: 'Dihydrogène'}, {el: 8, formula: 'H₂O', name: 'Eau'}, {el: 17, formula: 'HCl', name: 'Acide chlorhydrique'}] },
+            6: { valence: 4, bonds: 4, partners: [{el: 1, formula: 'CH₄', name: 'Méthane'}, {el: 8, formula: 'CO₂', name: 'Dioxyde de carbone'}, {el: 17, formula: 'CCl₄', name: 'Tétrachlorure de carbone'}] },
+            7: { valence: 5, bonds: 3, partners: [{el: 1, formula: 'NH₃', name: 'Ammoniac'}, {el: 8, formula: 'NO₂', name: 'Dioxyde d\'azote'}] },
+            8: { valence: 6, bonds: 2, partners: [{el: 1, formula: 'H₂O', name: 'Eau'}, {el: 6, formula: 'CO₂', name: 'Dioxyde de carbone'}] },
+            11: { valence: 1, bonds: 1, partners: [{el: 17, formula: 'NaCl', name: 'Sel de table'}, {el: 8, formula: 'Na₂O', name: 'Oxyde de sodium'}] },
+            17: { valence: 7, bonds: 1, partners: [{el: 1, formula: 'HCl', name: 'Acide chlorhydrique'}, {el: 11, formula: 'NaCl', name: 'Sel de table'}] },
+            26: { valence: 2, bonds: 2, partners: [{el: 8, formula: 'Fe₂O₃', name: 'Oxyde de fer (rouille)'}, {el: 16, formula: 'FeS', name: 'Sulfure de fer'}] }
+        };
+
+        // Get valence electrons from atomic number
+        function getValenceElectrons(atomicNumber) {
+            const shells = getElectronShells(atomicNumber);
+            return shells[shells.length - 1] || 0;
+        }
+
+        // Get bonds possible
+        function getBondsPossible(atomicNumber) {
+            const valence = getValenceElectrons(atomicNumber);
+            const group = getGroup(atomicNumber);
+            if (group <= 4) return valence;
+            return 8 - valence;
+        }
+
+        // Get group number (simplified)
+        function getGroup(atomicNumber) {
+            const el = elements.find(e => e.number === atomicNumber);
+            if (!el) return 0;
+            if (el.category === 'noble') return 18;
+            if (el.category === 'halogen') return 17;
+            if (el.category === 'alkali') return 1;
+            if (el.category === 'alkaline') return 2;
+            const valence = getValenceElectrons(atomicNumber);
+            return valence;
+        }
+
+        // Initialize Three.js
+        function initThree() {
+            const container = document.getElementById('canvas-container');
+            const canvas = document.getElementById('atom-canvas');
+            
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x08080c);
+            
+            camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 1000);
+            camera.position.z = 25;
+            
+            renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            
+            // Lights
+            const ambientLight = new THREE.AmbientLight(0x404050, 0.5);
+            scene.add(ambientLight);
+            
+            const pointLight = new THREE.PointLight(0x4a9eff, 1, 100);
+            pointLight.position.set(10, 10, 10);
+            scene.add(pointLight);
+            
+            const pointLight2 = new THREE.PointLight(0xff6b6b, 0.5, 100);
+            pointLight2.position.set(-10, -10, 10);
+            scene.add(pointLight2);
+            
+            // Mouse controls
+            let isDragging = false;
+            let previousMousePosition = { x: 0, y: 0 };
+            let rotationVelocity = { x: 0, y: 0 };
+            let dragDistance = 0;
+            
+            canvas.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                dragDistance = 0;
+                previousMousePosition = { x: e.clientX, y: e.clientY };
+            });
+            
+            canvas.addEventListener('mousemove', (e) => {
+                if (isDragging) {
+                    const deltaMove = {
+                        x: e.clientX - previousMousePosition.x,
+                        y: e.clientY - previousMousePosition.y
+                    };
+                    
+                    dragDistance += Math.abs(deltaMove.x) + Math.abs(deltaMove.y);
+                    
+                    const targetGroup = viewLevel === 'atom' ? atomGroup : 
+                                       viewLevel === 'subatomic' ? subatomicGroup : quantumGroup;
+                    if (targetGroup) {
+                        rotationVelocity.x = deltaMove.y * 0.005;
+                        rotationVelocity.y = deltaMove.x * 0.005;
+                        
+                        targetGroup.rotation.x += rotationVelocity.x;
+                        targetGroup.rotation.y += rotationVelocity.y;
+                    }
+                    
+                    previousMousePosition = { x: e.clientX, y: e.clientY };
+                }
+            });
+            
+            canvas.addEventListener('mouseup', () => isDragging = false);
+            canvas.addEventListener('mouseleave', () => isDragging = false);
+            
+            canvas.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                camera.position.z += e.deltaY * 0.05;
+                camera.position.z = Math.max(5, Math.min(50, camera.position.z));
+            });
+            
+            // Click detection for subatomic view
+            canvas.addEventListener('click', (e) => {
+                if (dragDistance > 5) return; // Was dragging, not clicking
+                if (!atomGroup && !subatomicGroup) return;
+                
+                const rect = canvas.getBoundingClientRect();
+                mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+                mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+                
+                raycaster.setFromCamera(mouse, camera);
+                
+                if (viewLevel === 'atom' && nucleusGroup) {
+                    const intersects = raycaster.intersectObjects(nucleusGroup.children);
+                    if (intersects.length > 0) {
+                        const particle = intersects[0].object;
+                        if (particle.userData.type === 'proton' || particle.userData.type === 'neutron') {
+                            enterSubatomicView(particle.userData.type);
+                        }
+                    }
+                } else if (viewLevel === 'subatomic' && quarks.length > 0) {
+                    const intersects = raycaster.intersectObjects(quarks);
+                    if (intersects.length > 0) {
+                        enterQuantumView();
+                    }
+                }
+            });
+            
+            window.addEventListener('resize', onWindowResize);
+            
+            animate();
+        }
+
+        function onWindowResize() {
+            const container = document.getElementById('canvas-container');
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+
+        function createAtom(element) {
+            clearAtom();
+            
+            currentElement = element;
+            atomGroup = new THREE.Group();
+            nucleusGroup = new THREE.Group();
+            
+            const protons = element.number;
+            const neutrons = Math.round(element.mass) - protons;
+            const shells = getElectronShells(protons);
+            
+            // Create nucleus particles
+            const nucleusRadius = Math.pow(protons + neutrons, 1/3) * 0.3 * settings.nucleusSize;
+            
+            // Protons
+            const protonGeometry = new THREE.SphereGeometry(0.25 * settings.nucleusSize, 16, 16);
+            const protonMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0xff6b6b,
+                emissive: settings.showGlow ? 0x331111 : 0x000000,
+                shininess: 30
+            });
+            
+            for (let i = 0; i < Math.min(protons, 50); i++) {
+                const proton = new THREE.Mesh(protonGeometry, protonMaterial);
+                const phi = Math.acos(-1 + (2 * i) / Math.max(protons, 1));
+                const theta = Math.sqrt(Math.max(protons, 1) * Math.PI) * phi;
+                
+                proton.position.x = nucleusRadius * Math.cos(theta) * Math.sin(phi) + (Math.random() - 0.5) * 0.2;
+                proton.position.y = nucleusRadius * Math.sin(theta) * Math.sin(phi) + (Math.random() - 0.5) * 0.2;
+                proton.position.z = nucleusRadius * Math.cos(phi) + (Math.random() - 0.5) * 0.2;
+                proton.userData.type = 'proton';
+                proton.visible = settings.showProtons;
+                
+                nucleusGroup.add(proton);
+            }
+            
+            // Neutrons
+            const neutronGeometry = new THREE.SphereGeometry(0.25 * settings.nucleusSize, 16, 16);
+            const neutronMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0x4dabf7,
+                emissive: settings.showGlow ? 0x112233 : 0x000000,
+                shininess: 30
+            });
+            
+            for (let i = 0; i < Math.min(neutrons, 50); i++) {
+                const neutron = new THREE.Mesh(neutronGeometry, neutronMaterial);
+                const phi = Math.acos(-1 + (2 * i + 1) / Math.max(neutrons, 1));
+                const theta = Math.sqrt(Math.max(neutrons, 1) * Math.PI) * phi + Math.PI;
+                
+                neutron.position.x = nucleusRadius * Math.cos(theta) * Math.sin(phi) + (Math.random() - 0.5) * 0.2;
+                neutron.position.y = nucleusRadius * Math.sin(theta) * Math.sin(phi) + (Math.random() - 0.5) * 0.2;
+                neutron.position.z = nucleusRadius * Math.cos(phi) + (Math.random() - 0.5) * 0.2;
+                neutron.userData.type = 'neutron';
+                neutron.visible = settings.showNeutrons;
+                
+                nucleusGroup.add(neutron);
+            }
+            
+            atomGroup.add(nucleusGroup);
+            
+            // Create electrons and orbits
+            const electronGeometry = new THREE.SphereGeometry(0.15, 16, 16);
+            
+            shells.forEach((electronCount, shellIndex) => {
+                const orbitRadius = (3 + shellIndex * 2.5) * settings.orbitDistance;
+                
+                // Use energy level color if enabled
+                const shellColor = settings.showEnergyLevels ? shellColors[shellIndex % shellColors.length] : 0xffd43b;
+                const emissiveColor = settings.showEnergyLevels 
+                    ? new THREE.Color(shellColor).multiplyScalar(0.2) 
+                    : (settings.showGlow ? new THREE.Color(0x332200) : new THREE.Color(0x000000));
+                
+                const electronMaterial = new THREE.MeshPhongMaterial({ 
+                    color: shellColor,
+                    emissive: emissiveColor,
+                    shininess: 50
+                });
+                
+                // Create orbit line with shell color if energy levels enabled
+                const orbitPoints = [];
+                for (let i = 0; i <= 64; i++) {
+                    const angle = (i / 64) * Math.PI * 2;
+                    orbitPoints.push(new THREE.Vector3(
+                        Math.cos(angle) * orbitRadius,
+                        Math.sin(angle) * orbitRadius,
+                        0
+                    ));
+                }
+                
+                const orbitGeometry = new THREE.BufferGeometry().setFromPoints(orbitPoints);
+                const orbitMaterial = new THREE.LineBasicMaterial({ 
+                    color: settings.showEnergyLevels ? shellColor : 0x2a2a35,
+                    transparent: true,
+                    opacity: settings.showEnergyLevels ? 0.5 : 0.3
+                });
+                const orbitLine = new THREE.Line(orbitGeometry, orbitMaterial);
+                orbitLine.rotation.x = Math.random() * Math.PI;
+                orbitLine.rotation.y = Math.random() * Math.PI;
+                orbitLine.visible = settings.showOrbits;
+                atomGroup.add(orbitLine);
+                orbitLines.push(orbitLine);
+                
+                // Create electrons for this shell
+                for (let i = 0; i < electronCount; i++) {
+                    const electron = new THREE.Mesh(electronGeometry, electronMaterial.clone());
+                    electron.userData = {
+                        type: 'electron',
+                        shell: shellIndex,
+                        angle: (i / electronCount) * Math.PI * 2,
+                        speed: (0.5 + Math.random() * 0.3) / (shellIndex + 1),
+                        orbitRadius: orbitRadius,
+                        orbitTilt: orbitLine.rotation.clone(),
+                        inclination: (Math.random() - 0.5) * 0.3
+                    };
+                    electron.visible = settings.showElectrons;
+                    
+                    // Create trail with smoke-like effect (colored by shell if energy levels shown)
+                    const trailGroup = new THREE.Group();
+                    trailGroup.userData.spheres = [];
+                    trailGroup.userData.positions = [];
+                    
+                    const trailBaseColor = new THREE.Color(shellColor);
+                    
+                    for (let t = 0; t < settings.trailLength; t++) {
+                        const trailSphereGeo = new THREE.SphereGeometry(0.12, 8, 8);
+                        const opacity = Math.pow(1 - t / settings.trailLength, 2) * 0.4;
+                        const trailColor = trailBaseColor.clone().lerp(new THREE.Color(0x1a1a28), t * 0.03);
+                        const trailSphereMat = new THREE.MeshBasicMaterial({
+                            color: trailColor,
+                            transparent: true,
+                            opacity: opacity
+                        });
+                        const trailSphere = new THREE.Mesh(trailSphereGeo, trailSphereMat);
+                        trailSphere.scale.setScalar(1 - t * 0.02);
+                        trailSphere.visible = false;
+                        trailGroup.add(trailSphere);
+                        trailGroup.userData.spheres.push(trailSphere);
+                    }
+                    
+                    const trail = trailGroup;
+                    trail.visible = settings.showTrails && settings.showElectrons;
+                    
+                    atomGroup.add(electron);
+                    atomGroup.add(trail);
+                    
+                    electrons.push(electron);
+                    trails.push(trail);
+                }
+            });
+            
+            scene.add(atomGroup);
+            
+            // Update info panel
+            document.getElementById('placeholder').style.display = 'none';
+            document.getElementById('element-info').style.display = 'block';
+            document.getElementById('click-hint').style.display = 'block';
+            document.getElementById('info-symbol').textContent = element.symbol;
+            document.getElementById('info-name').textContent = element.name;
+            document.getElementById('info-number').textContent = element.number;
+            document.getElementById('info-mass').textContent = element.mass;
+            document.getElementById('info-protons').textContent = protons;
+            document.getElementById('info-neutrons').textContent = neutrons;
+            document.getElementById('info-electrons').textContent = protons;
+            document.getElementById('info-config').textContent = element.config;
+        }
+
+        function enterSubatomicView(particleType) {
+            viewLevel = 'subatomic';
+            selectedParticle = particleType;
+            
+            // Hide atom view
+            if (atomGroup) atomGroup.visible = false;
+            
+            // Update UI
+            document.getElementById('view-mode').style.display = 'flex';
+            document.getElementById('view-level').textContent = particleType === 'proton' ? 'Proton' : 'Neutron';
+            document.getElementById('element-info').style.display = 'none';
+            document.getElementById('click-hint').style.display = 'block';
+            document.getElementById('click-hint').textContent = 'Cliquez sur un quark pour voir le champ quantique';
+            document.getElementById('particle-info').style.display = 'block';
+            document.getElementById('quantum-info').style.display = 'none';
+            
+            if (particleType === 'proton') {
+                document.getElementById('particle-title').textContent = 'Proton (uud)';
+                document.getElementById('particle-desc').textContent = 'Le proton est composé de 2 quarks up et 1 quark down, liés par des gluons porteurs de la force forte. Charge: +1';
+            } else {
+                document.getElementById('particle-title').textContent = 'Neutron (udd)';
+                document.getElementById('particle-desc').textContent = 'Le neutron est composé de 1 quark up et 2 quarks down, liés par des gluons. Charge: 0';
+            }
+            
+            createSubatomicView(particleType);
+            camera.position.z = 12;
+        }
+
+        function exitSubatomicView() {
+            // Determine where to go back to
+            if (viewLevel === 'quantum') {
+                // Go back to subatomic
+                viewLevel = 'subatomic';
+                
+                if (quantumGroup) {
+                    scene.remove(quantumGroup);
+                    quantumGroup = null;
+                }
+                quantumParticles = [];
+                virtualPairs = [];
+                fieldLines = [];
+                
+                if (subatomicGroup) subatomicGroup.visible = true;
+                
+                document.getElementById('view-level').textContent = selectedParticle === 'proton' ? 'Proton' : 'Neutron';
+                document.getElementById('quantum-info').style.display = 'none';
+                document.getElementById('particle-info').style.display = 'block';
+                document.getElementById('click-hint').style.display = 'block';
+                document.getElementById('click-hint').textContent = 'Cliquez sur un quark pour voir le champ quantique';
+                
+                camera.position.z = 12;
+            } else {
+                // Go back to atom
+                viewLevel = 'atom';
+                selectedParticle = null;
+                
+                if (subatomicGroup) {
+                    scene.remove(subatomicGroup);
+                    subatomicGroup = null;
+                }
+                if (quantumGroup) {
+                    scene.remove(quantumGroup);
+                    quantumGroup = null;
+                }
+                quarks = [];
+                gluons = [];
+                quarkTrails = [];
+                quantumParticles = [];
+                virtualPairs = [];
+                fieldLines = [];
+                
+                if (atomGroup) atomGroup.visible = true;
+                
+                document.getElementById('view-mode').style.display = 'none';
+                document.getElementById('element-info').style.display = 'block';
+                document.getElementById('particle-info').style.display = 'none';
+                document.getElementById('quantum-info').style.display = 'none';
+                document.getElementById('click-hint').style.display = 'block';
+                document.getElementById('click-hint').textContent = 'Cliquez sur un proton ou neutron pour voir les quarks';
+                
+                camera.position.z = 25;
+            }
+        }
+
+        function enterQuantumView() {
+            viewLevel = 'quantum';
+            
+            // Hide subatomic view
+            if (subatomicGroup) subatomicGroup.visible = false;
+            
+            // Update UI
+            document.getElementById('view-level').textContent = 'Champ Quantique';
+            document.getElementById('particle-info').style.display = 'none';
+            document.getElementById('quantum-info').style.display = 'block';
+            document.getElementById('click-hint').style.display = 'none';
+            
+            createQuantumView();
+            camera.position.z = 15;
+        }
+
+        function createQuantumView() {
+            if (quantumGroup) {
+                scene.remove(quantumGroup);
+            }
+            
+            quantumGroup = new THREE.Group();
+            quantumParticles = [];
+            virtualPairs = [];
+            fieldLines = [];
+            
+            // Create quantum field fluctuations (animated point cloud)
+            const fieldPointCount = 3000;
+            const fieldPositions = new Float32Array(fieldPointCount * 3);
+            const fieldColors = new Float32Array(fieldPointCount * 3);
+            const fieldSizes = new Float32Array(fieldPointCount);
+            
+            for (let i = 0; i < fieldPointCount; i++) {
+                const i3 = i * 3;
+                fieldPositions[i3] = (Math.random() - 0.5) * 20;
+                fieldPositions[i3 + 1] = (Math.random() - 0.5) * 20;
+                fieldPositions[i3 + 2] = (Math.random() - 0.5) * 20;
+                
+                // Purple/violet tones for quantum field
+                const intensity = 0.3 + Math.random() * 0.7;
+                fieldColors[i3] = 0.85 * intensity;
+                fieldColors[i3 + 1] = 0.47 * intensity;
+                fieldColors[i3 + 2] = 0.95 * intensity;
+                
+                fieldSizes[i] = 0.05 + Math.random() * 0.1;
+            }
+            
+            const fieldGeometry = new THREE.BufferGeometry();
+            fieldGeometry.setAttribute('position', new THREE.BufferAttribute(fieldPositions, 3));
+            fieldGeometry.setAttribute('color', new THREE.BufferAttribute(fieldColors, 3));
+            
+            const fieldMaterial = new THREE.PointsMaterial({
+                size: 0.08,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.6,
+                blending: THREE.AdditiveBlending
+            });
+            
+            const fieldCloud = new THREE.Points(fieldGeometry, fieldMaterial);
+            fieldCloud.userData.originalPositions = fieldPositions.slice();
+            quantumGroup.add(fieldCloud);
+            quantumParticles.push(fieldCloud);
+            
+            // Create vibrating strings (string theory visualization)
+            for (let s = 0; s < 8; s++) {
+                const stringPoints = [];
+                const stringLength = 3;
+                const segments = 30;
+                
+                for (let i = 0; i <= segments; i++) {
+                    stringPoints.push(new THREE.Vector3(
+                        (i / segments - 0.5) * stringLength,
+                        0,
+                        0
+                    ));
+                }
+                
+                const stringGeometry = new THREE.BufferGeometry().setFromPoints(stringPoints);
+                const stringMaterial = new THREE.LineBasicMaterial({
+                    color: 0x4ecdc4,
+                    transparent: true,
+                    opacity: 0.4
+                });
+                
+                const string = new THREE.Line(stringGeometry, stringMaterial);
+                string.position.set(
+                    (Math.random() - 0.5) * 10,
+                    (Math.random() - 0.5) * 10,
+                    (Math.random() - 0.5) * 10
+                );
+                string.rotation.set(
+                    Math.random() * Math.PI,
+                    Math.random() * Math.PI,
+                    Math.random() * Math.PI
+                );
+                string.userData = {
+                    frequency: 1 + Math.random() * 3,
+                    amplitude: 0.3 + Math.random() * 0.5,
+                    phase: Math.random() * Math.PI * 2
+                };
+                
+                quantumGroup.add(string);
+                fieldLines.push(string);
+            }
+            
+            // Create virtual particle pairs
+            for (let i = 0; i < 6; i++) {
+                createVirtualPair();
+            }
+            
+            // Central glow representing the quark
+            const glowGeometry = new THREE.SphereGeometry(1.5, 32, 32);
+            const glowMaterial = new THREE.MeshBasicMaterial({
+                color: 0xda77f2,
+                transparent: true,
+                opacity: 0.15
+            });
+            const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+            quantumGroup.add(glow);
+            
+            // Wireframe boundary
+            const boundaryGeometry = new THREE.IcosahedronGeometry(8, 1);
+            const boundaryMaterial = new THREE.MeshBasicMaterial({
+                color: 0xda77f2,
+                wireframe: true,
+                transparent: true,
+                opacity: 0.1
+            });
+            const boundary = new THREE.Mesh(boundaryGeometry, boundaryMaterial);
+            quantumGroup.add(boundary);
+            
+            scene.add(quantumGroup);
+        }
+
+        function createVirtualPair() {
+            const pairGroup = new THREE.Group();
+            
+            // Particle
+            const particleGeometry = new THREE.SphereGeometry(0.12, 16, 16);
+            const particleMaterial = new THREE.MeshBasicMaterial({
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0
+            });
+            const particle = new THREE.Mesh(particleGeometry, particleMaterial);
+            
+            // Antiparticle
+            const antiparticleMaterial = new THREE.MeshBasicMaterial({
+                color: 0xff6b6b,
+                transparent: true,
+                opacity: 0
+            });
+            const antiparticle = new THREE.Mesh(particleGeometry.clone(), antiparticleMaterial);
+            
+            // Random starting position
+            const startPos = new THREE.Vector3(
+                (Math.random() - 0.5) * 12,
+                (Math.random() - 0.5) * 12,
+                (Math.random() - 0.5) * 12
+            );
+            
+            particle.position.copy(startPos);
+            antiparticle.position.copy(startPos);
+            
+            pairGroup.add(particle);
+            pairGroup.add(antiparticle);
+            
+            pairGroup.userData = {
+                lifetime: Math.random(), // Start at random phase
+                maxLifetime: 0.8 + Math.random() * 1.5,
+                maxSeparation: 0.3 + Math.random() * 0.8,
+                direction: new THREE.Vector3(
+                    Math.random() - 0.5,
+                    Math.random() - 0.5,
+                    Math.random() - 0.5
+                ).normalize(),
+                startPosition: startPos.clone()
+            };
+            
+            quantumGroup.add(pairGroup);
+            virtualPairs.push(pairGroup);
+        }
+
+        function createSubatomicView(particleType) {
+            if (subatomicGroup) {
+                scene.remove(subatomicGroup);
+            }
+            
+            subatomicGroup = new THREE.Group();
+            quarks = [];
+            gluons = [];
+            quarkTrails = [];
+            
+            // Quark configurations
+            // Proton: 2 up (charge +2/3), 1 down (charge -1/3)
+            // Neutron: 1 up (charge +2/3), 2 down (charge -1/3)
+            const quarkConfig = particleType === 'proton' 
+                ? [{type: 'up', color: 0xff6b9d}, {type: 'up', color: 0xff6b9d}, {type: 'down', color: 0x4ecdc4}]
+                : [{type: 'up', color: 0xff6b9d}, {type: 'down', color: 0x4ecdc4}, {type: 'down', color: 0x4ecdc4}];
+            
+            // Create quarks
+            quarkConfig.forEach((q, i) => {
+                const quarkGeometry = new THREE.SphereGeometry(0.6, 32, 32);
+                const quarkMaterial = new THREE.MeshPhongMaterial({
+                    color: q.color,
+                    emissive: new THREE.Color(q.color).multiplyScalar(0.2),
+                    shininess: 50,
+                    transparent: true,
+                    opacity: 0.9
+                });
+                
+                const quark = new THREE.Mesh(quarkGeometry, quarkMaterial);
+                const angle = (i / 3) * Math.PI * 2;
+                quark.userData = {
+                    type: q.type,
+                    baseAngle: angle,
+                    orbitRadius: 2,
+                    speed: 0.8 + Math.random() * 0.4,
+                    verticalOffset: Math.sin(angle) * 0.5,
+                    phase: Math.random() * Math.PI * 2
+                };
+                
+                subatomicGroup.add(quark);
+                quarks.push(quark);
+                
+                // Create quark trail
+                const trailGroup = new THREE.Group();
+                trailGroup.userData.spheres = [];
+                trailGroup.userData.positions = [];
+                
+                for (let t = 0; t < 15; t++) {
+                    const trailSphereGeo = new THREE.SphereGeometry(0.08, 8, 8);
+                    const opacity = Math.pow(1 - t / 15, 2) * 0.5;
+                    const baseColor = new THREE.Color(q.color);
+                    const trailSphereMat = new THREE.MeshBasicMaterial({
+                        color: baseColor.clone().lerp(new THREE.Color(0x1a1a28), t * 0.05),
+                        transparent: true,
+                        opacity: opacity
+                    });
+                    const trailSphere = new THREE.Mesh(trailSphereGeo, trailSphereMat);
+                    trailSphere.scale.setScalar(1 - t * 0.04);
+                    trailSphere.visible = false;
+                    trailGroup.add(trailSphere);
+                    trailGroup.userData.spheres.push(trailSphere);
+                }
+                
+                subatomicGroup.add(trailGroup);
+                quarkTrails.push(trailGroup);
+            });
+            
+            // Create gluon field visualization (connecting lines with particles)
+            for (let i = 0; i < 3; i++) {
+                const gluonGeometry = new THREE.SphereGeometry(0.2, 16, 16);
+                const gluonMaterial = new THREE.MeshPhongMaterial({
+                    color: 0xffe66d,
+                    emissive: 0x332200,
+                    transparent: true,
+                    opacity: 0.7
+                });
+                
+                const gluon = new THREE.Mesh(gluonGeometry, gluonMaterial);
+                gluon.userData = {
+                    fromQuark: i,
+                    toQuark: (i + 1) % 3,
+                    t: Math.random(),
+                    speed: 1.5 + Math.random()
+                };
+                
+                subatomicGroup.add(gluon);
+                gluons.push(gluon);
+            }
+            
+            // Add gluon connection lines
+            for (let i = 0; i < 3; i++) {
+                const lineGeometry = new THREE.BufferGeometry();
+                const positions = new Float32Array(6);
+                lineGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                
+                const lineMaterial = new THREE.LineBasicMaterial({
+                    color: 0xffe66d,
+                    transparent: true,
+                    opacity: 0.2
+                });
+                
+                const line = new THREE.Line(lineGeometry, lineMaterial);
+                line.userData = { from: i, to: (i + 1) % 3 };
+                subatomicGroup.add(line);
+            }
+            
+            // Add particle boundary sphere (representing confinement)
+            const boundaryGeometry = new THREE.SphereGeometry(4, 32, 32);
+            const boundaryMaterial = new THREE.MeshBasicMaterial({
+                color: particleType === 'proton' ? 0xff6b6b : 0x4dabf7,
+                transparent: true,
+                opacity: 0.05,
+                side: THREE.BackSide
+            });
+            const boundary = new THREE.Mesh(boundaryGeometry, boundaryMaterial);
+            subatomicGroup.add(boundary);
+            
+            // Add wireframe for boundary
+            const wireframeGeometry = new THREE.SphereGeometry(4, 16, 16);
+            const wireframeMaterial = new THREE.MeshBasicMaterial({
+                color: particleType === 'proton' ? 0xff6b6b : 0x4dabf7,
+                wireframe: true,
+                transparent: true,
+                opacity: 0.1
+            });
+            const wireframe = new THREE.Mesh(wireframeGeometry, wireframeMaterial);
+            subatomicGroup.add(wireframe);
+            
+            scene.add(subatomicGroup);
+        }
+
+        function clearAtom() {
+            if (atomGroup) {
+                scene.remove(atomGroup);
+                atomGroup = null;
+            }
+            if (subatomicGroup) {
+                scene.remove(subatomicGroup);
+                subatomicGroup = null;
+            }
+            if (quantumGroup) {
+                scene.remove(quantumGroup);
+                quantumGroup = null;
+            }
+            electrons = [];
+            trails = [];
+            orbitLines = [];
+            quarks = [];
+            gluons = [];
+            quarkTrails = [];
+            quantumParticles = [];
+            virtualPairs = [];
+            fieldLines = [];
+            viewLevel = 'atom';
+            document.getElementById('view-mode').style.display = 'none';
+            document.getElementById('particle-info').style.display = 'none';
+            document.getElementById('quantum-info').style.display = 'none';
+        }
+
+        function selectElement(element, cell) {
+            if (selectedElement) {
+                selectedElement.classList.remove('selected');
+            }
+            cell.classList.add('selected');
+            selectedElement = cell;
+            
+            createAtom(element);
+            
+            // Update educational panels
+            updateEnergyLevelDisplay();
+            if (settings.showConfigBuilder) initConfigBuilder();
+            updateDecayPanel();
+            updateBondingPanel();
+        }
+
+        function animate() {
+            animationId = requestAnimationFrame(animate);
+            
+            if (viewLevel === 'atom' && atomGroup) {
+                // Auto rotate
+                atomGroup.rotation.y += settings.autoRotate * 0.01;
+                
+                // Animate nucleus wobble
+                if (nucleusGroup) {
+                    nucleusGroup.children.forEach((particle, i) => {
+                        particle.position.x += Math.sin(Date.now() * 0.002 + i) * 0.002;
+                        particle.position.y += Math.cos(Date.now() * 0.002 + i * 1.5) * 0.002;
+                    });
+                }
+                
+                // Animate electrons
+                electrons.forEach((electron, index) => {
+                    const data = electron.userData;
+                    data.angle += data.speed * settings.speed * 0.02;
+                    
+                    const x = Math.cos(data.angle) * data.orbitRadius;
+                    const y = Math.sin(data.angle) * data.orbitRadius;
+                    const z = Math.sin(data.angle * 2) * data.orbitRadius * data.inclination;
+                    
+                    // Apply orbit tilt
+                    const pos = new THREE.Vector3(x, y, z);
+                    pos.applyEuler(data.orbitTilt);
+                    
+                    electron.position.copy(pos);
+                    
+                    // Update trail with smoke effect
+                    const trail = trails[index];
+                    if (settings.showTrails && settings.showElectrons) {
+                        trail.userData.positions.unshift(pos.clone());
+                        if (trail.userData.positions.length > settings.trailLength) {
+                            trail.userData.positions.pop();
+                        }
+                        
+                        trail.userData.spheres.forEach((sphere, i) => {
+                            if (i < trail.userData.positions.length) {
+                                sphere.position.copy(trail.userData.positions[i]);
+                                sphere.visible = true;
+                            } else {
+                                sphere.visible = false;
+                            }
+                        });
+                    } else {
+                        trail.userData.spheres.forEach(s => s.visible = false);
+                    }
+                });
+            }
+            
+            // Subatomic view animation
+            if (viewLevel === 'subatomic' && subatomicGroup) {
+                subatomicGroup.rotation.y += settings.autoRotate * 0.008;
+                
+                const time = Date.now() * 0.001;
+                
+                // Animate quarks with chaotic orbital motion
+                quarks.forEach((quark, index) => {
+                    const data = quark.userData;
+                    const angle = data.baseAngle + time * data.speed * settings.speed;
+                    const wobble = Math.sin(time * 2 + data.phase) * 0.3;
+                    
+                    quark.position.x = Math.cos(angle) * (data.orbitRadius + wobble);
+                    quark.position.y = Math.sin(angle * 1.3) * (data.orbitRadius * 0.7 + wobble);
+                    quark.position.z = Math.sin(angle * 0.7 + data.phase) * (data.orbitRadius * 0.5);
+                    
+                    // Update quark trails
+                    const trail = quarkTrails[index];
+                    if (settings.showTrails) {
+                        trail.userData.positions.unshift(quark.position.clone());
+                        if (trail.userData.positions.length > 15) {
+                            trail.userData.positions.pop();
+                        }
+                        
+                        trail.userData.spheres.forEach((sphere, i) => {
+                            if (i < trail.userData.positions.length) {
+                                sphere.position.copy(trail.userData.positions[i]);
+                                sphere.visible = true;
+                            } else {
+                                sphere.visible = false;
+                            }
+                        });
+                    }
+                });
+                
+                // Animate gluons traveling between quarks
+                gluons.forEach(gluon => {
+                    gluon.userData.t += 0.02 * gluon.userData.speed * settings.speed;
+                    if (gluon.userData.t > 1) {
+                        gluon.userData.t = 0;
+                        // Swap direction
+                        const temp = gluon.userData.fromQuark;
+                        gluon.userData.fromQuark = gluon.userData.toQuark;
+                        gluon.userData.toQuark = temp;
+                    }
+                    
+                    const from = quarks[gluon.userData.fromQuark].position;
+                    const to = quarks[gluon.userData.toQuark].position;
+                    const t = gluon.userData.t;
+                    
+                    // Curved path
+                    const midPoint = new THREE.Vector3().addVectors(from, to).multiplyScalar(0.5);
+                    midPoint.y += Math.sin(t * Math.PI) * 0.8;
+                    
+                    gluon.position.lerpVectors(from, midPoint, t * 2);
+                    if (t > 0.5) {
+                        gluon.position.lerpVectors(midPoint, to, (t - 0.5) * 2);
+                    }
+                });
+                
+                // Update connection lines
+                subatomicGroup.children.forEach(child => {
+                    if (child.type === 'Line' && child.userData.from !== undefined) {
+                        const positions = child.geometry.attributes.position.array;
+                        const from = quarks[child.userData.from].position;
+                        const to = quarks[child.userData.to].position;
+                        positions[0] = from.x;
+                        positions[1] = from.y;
+                        positions[2] = from.z;
+                        positions[3] = to.x;
+                        positions[4] = to.y;
+                        positions[5] = to.z;
+                        child.geometry.attributes.position.needsUpdate = true;
+                    }
+                });
+            }
+            
+            // Quantum field view animation
+            if (viewLevel === 'quantum' && quantumGroup) {
+                quantumGroup.rotation.y += settings.autoRotate * 0.005;
+                
+                const time = Date.now() * 0.001;
+                
+                // Animate quantum field fluctuations
+                quantumParticles.forEach(field => {
+                    if (field.type === 'Points' && field.userData.originalPositions) {
+                        const positions = field.geometry.attributes.position.array;
+                        const original = field.userData.originalPositions;
+                        
+                        for (let i = 0; i < positions.length; i += 3) {
+                            const idx = i / 3;
+                            positions[i] = original[i] + Math.sin(time * 2 + idx * 0.1) * 0.15;
+                            positions[i + 1] = original[i + 1] + Math.cos(time * 1.5 + idx * 0.15) * 0.15;
+                            positions[i + 2] = original[i + 2] + Math.sin(time * 1.8 + idx * 0.12) * 0.15;
+                        }
+                        field.geometry.attributes.position.needsUpdate = true;
+                    }
+                });
+                
+                // Animate vibrating strings
+                fieldLines.forEach(string => {
+                    const positions = string.geometry.attributes.position.array;
+                    const data = string.userData;
+                    const segments = positions.length / 3 - 1;
+                    
+                    for (let i = 0; i <= segments; i++) {
+                        const t = i / segments;
+                        const y = Math.sin(t * Math.PI * data.frequency + time * 5 + data.phase) * data.amplitude * Math.sin(t * Math.PI);
+                        const z = Math.cos(t * Math.PI * data.frequency * 0.7 + time * 4 + data.phase) * data.amplitude * 0.5 * Math.sin(t * Math.PI);
+                        positions[i * 3 + 1] = y;
+                        positions[i * 3 + 2] = z;
+                    }
+                    string.geometry.attributes.position.needsUpdate = true;
+                });
+                
+                // Animate virtual particle pairs (appear, separate, annihilate)
+                virtualPairs.forEach((pair, index) => {
+                    const data = pair.userData;
+                    data.lifetime += 0.016 * settings.speed;
+                    
+                    const progress = data.lifetime / data.maxLifetime;
+                    
+                    if (progress >= 1) {
+                        // Reset the pair at new position
+                        data.lifetime = 0;
+                        data.startPosition = new THREE.Vector3(
+                            (Math.random() - 0.5) * 12,
+                            (Math.random() - 0.5) * 12,
+                            (Math.random() - 0.5) * 12
+                        );
+                        data.direction = new THREE.Vector3(
+                            Math.random() - 0.5,
+                            Math.random() - 0.5,
+                            Math.random() - 0.5
+                        ).normalize();
+                        data.maxLifetime = 0.8 + Math.random() * 1.5;
+                        data.maxSeparation = 0.3 + Math.random() * 0.8;
+                        
+                        pair.children[0].position.copy(data.startPosition);
+                        pair.children[1].position.copy(data.startPosition);
+                    } else {
+                        // Animate separation and opacity
+                        const separation = Math.sin(progress * Math.PI) * data.maxSeparation;
+                        const opacity = Math.sin(progress * Math.PI);
+                        
+                        pair.children[0].position.copy(data.startPosition).add(
+                            data.direction.clone().multiplyScalar(separation)
+                        );
+                        pair.children[1].position.copy(data.startPosition).add(
+                            data.direction.clone().multiplyScalar(-separation)
+                        );
+                        
+                        pair.children[0].material.opacity = opacity * 0.8;
+                        pair.children[1].material.opacity = opacity * 0.8;
+                    }
+                });
+            }
+            
+            renderer.render(scene, camera);
+        }
+
+        // ============================================
+        // EDUCATIONAL FUNCTIONS
+        // ============================================
+
+        // Update energy level display
+        function updateEnergyLevelDisplay() {
+            const legend = document.getElementById('energy-legend');
+            legend.style.display = settings.showEnergyLevels && viewLevel === 'atom' ? 'block' : 'none';
+        }
+
+        // Initialize configuration builder
+        function initConfigBuilder() {
+            if (!currentElement) return;
+            
+            const diagram = document.getElementById('shell-diagram');
+            diagram.innerHTML = '';
+            configBuilderState = [];
+            
+            const targetElectrons = currentElement.number;
+            document.getElementById('total-electrons').textContent = targetElectrons;
+            
+            // Create shell rows
+            for (let shell = 0; shell < 4; shell++) {
+                const row = document.createElement('div');
+                row.className = 'shell-row';
+                
+                const label = document.createElement('span');
+                label.className = 'shell-label';
+                label.textContent = `n=${shell + 1}`;
+                label.style.color = `#${shellColors[shell].toString(16).padStart(6, '0')}`;
+                row.appendChild(label);
+                
+                const slots = document.createElement('div');
+                slots.className = 'shell-slots';
+                
+                const capacity = shellCapacities[shell];
+                configBuilderState[shell] = [];
+                
+                for (let i = 0; i < Math.min(capacity, 18); i++) {
+                    const slot = document.createElement('div');
+                    slot.className = 'electron-slot';
+                    slot.dataset.shell = shell;
+                    slot.dataset.index = i;
+                    slot.addEventListener('click', () => toggleElectronSlot(shell, i));
+                    slots.appendChild(slot);
+                    configBuilderState[shell][i] = false;
+                }
+                
+                row.appendChild(slots);
+                diagram.appendChild(row);
+            }
+            
+            updateConfigNotation();
+        }
+
+        function toggleElectronSlot(shell, index) {
+            const slot = document.querySelector(`.electron-slot[data-shell="${shell}"][data-index="${index}"]`);
+            configBuilderState[shell][index] = !configBuilderState[shell][index];
+            slot.classList.toggle('filled', configBuilderState[shell][index]);
+            updateConfigNotation();
+        }
+
+        function updateConfigNotation() {
+            let totalPlaced = 0;
+            let notation = '';
+            const subshells = ['s', 'p', 'd', 'f'];
+            
+            for (let shell = 0; shell < configBuilderState.length; shell++) {
+                let shellCount = configBuilderState[shell].filter(x => x).length;
+                totalPlaced += shellCount;
+                
+                if (shellCount > 0) {
+                    // Simplified notation
+                    let remaining = shellCount;
+                    let subshellIdx = 0;
+                    const subshellCaps = [2, 6, 10, 14];
+                    
+                    while (remaining > 0 && subshellIdx < subshellCaps.length) {
+                        const take = Math.min(remaining, subshellCaps[subshellIdx]);
+                        if (take > 0) {
+                            notation += `${shell + 1}${subshells[subshellIdx]}${toSuperscript(take)} `;
+                        }
+                        remaining -= take;
+                        subshellIdx++;
+                    }
+                }
+            }
+            
+            document.getElementById('placed-electrons').textContent = totalPlaced;
+            document.getElementById('config-notation').textContent = notation || '(vide)';
+        }
+
+        function toSuperscript(num) {
+            const superscripts = ['⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹'];
+            return num.toString().split('').map(d => superscripts[parseInt(d)]).join('');
+        }
+
+        function autoFillConfig() {
+            if (!currentElement) return;
+            
+            // Reset all
+            configBuilderState.forEach((shell, sIdx) => {
+                shell.forEach((_, i) => {
+                    configBuilderState[sIdx][i] = false;
+                });
+            });
+            
+            // Fill according to aufbau principle (simplified)
+            let remaining = currentElement.number;
+            for (let shell = 0; shell < configBuilderState.length && remaining > 0; shell++) {
+                const capacity = shellCapacities[shell];
+                const toFill = Math.min(remaining, capacity, configBuilderState[shell].length);
+                for (let i = 0; i < toFill; i++) {
+                    configBuilderState[shell][i] = true;
+                }
+                remaining -= toFill;
+            }
+            
+            // Update UI
+            document.querySelectorAll('.electron-slot').forEach(slot => {
+                const shell = parseInt(slot.dataset.shell);
+                const idx = parseInt(slot.dataset.index);
+                slot.classList.toggle('filled', configBuilderState[shell][idx]);
+            });
+            
+            updateConfigNotation();
+        }
+
+        // Initialize decay panel
+        function updateDecayPanel() {
+            if (!currentElement) return;
+            
+            const isRadioactive = radioactiveElements.includes(currentElement.number);
+            document.getElementById('radioactive-badge').style.display = isRadioactive ? 'block' : 'none';
+            
+            if (!settings.showDecay || !isRadioactive) {
+                document.getElementById('decay-panel').style.display = 'none';
+                return;
+            }
+            
+            document.getElementById('decay-panel').style.display = 'block';
+            document.getElementById('decay-result').style.display = 'none';
+            
+            // Enable/disable decay types based on element
+            document.getElementById('alpha-decay').style.display = currentElement.number >= 84 ? 'flex' : 'none';
+            document.getElementById('beta-minus-decay').style.display = 'flex';
+            document.getElementById('beta-plus-decay').style.display = currentElement.number <= 83 ? 'flex' : 'none';
+        }
+
+        function simulateDecay(type) {
+            if (!currentElement || decayAnimating) return;
+            
+            const result = document.getElementById('decay-result');
+            const equation = document.getElementById('decay-equation');
+            const explanation = document.getElementById('decay-explanation');
+            
+            let newZ = currentElement.number;
+            let newA = Math.round(currentElement.mass);
+            let particle = '';
+            let explainText = '';
+            
+            switch(type) {
+                case 'alpha':
+                    newZ -= 2;
+                    newA -= 4;
+                    particle = ' → ⁴₂He + ';
+                    explainText = 'Le noyau émet une particule alpha (2 protons + 2 neutrons)';
+                    break;
+                case 'beta-minus':
+                    newZ += 1;
+                    particle = ' → e⁻ + ν̄ + ';
+                    explainText = 'Un neutron se transforme en proton en émettant un électron';
+                    break;
+                case 'beta-plus':
+                    newZ -= 1;
+                    particle = ' → e⁺ + ν + ';
+                    explainText = 'Un proton se transforme en neutron en émettant un positron';
+                    break;
+            }
+            
+            const newElement = elements.find(e => e.number === newZ);
+            const newSymbol = newElement ? newElement.symbol : '?';
+            
+            equation.innerHTML = `<sup>${Math.round(currentElement.mass)}</sup>${currentElement.symbol}${particle}<sup>${newA}</sup>${newSymbol}`;
+            explanation.textContent = explainText;
+            result.style.display = 'block';
+            
+            // Animate decay in 3D
+            animateDecay(type, newZ, newA);
+        }
+
+        function animateDecay(type, newZ, newA) {
+            if (!atomGroup || !nucleusGroup) return;
+            decayAnimating = true;
+            
+            // Create emitted particle
+            let emittedParticles = [];
+            
+            if (type === 'alpha') {
+                // Create alpha particle (2 protons + 2 neutrons)
+                const alphaGroup = new THREE.Group();
+                for (let i = 0; i < 2; i++) {
+                    const p = new THREE.Mesh(
+                        new THREE.SphereGeometry(0.25, 16, 16),
+                        new THREE.MeshPhongMaterial({ color: 0xff6b6b, emissive: 0x331111 })
+                    );
+                    p.position.set((i - 0.5) * 0.3, 0, 0);
+                    alphaGroup.add(p);
+                }
+                for (let i = 0; i < 2; i++) {
+                    const n = new THREE.Mesh(
+                        new THREE.SphereGeometry(0.25, 16, 16),
+                        new THREE.MeshPhongMaterial({ color: 0x4dabf7, emissive: 0x112233 })
+                    );
+                    n.position.set((i - 0.5) * 0.3, 0.3, 0);
+                    alphaGroup.add(n);
+                }
+                alphaGroup.userData = { velocity: new THREE.Vector3(0.3, 0.1, 0.05) };
+                scene.add(alphaGroup);
+                emittedParticles.push(alphaGroup);
+            } else {
+                // Create electron or positron
+                const electron = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.15, 16, 16),
+                    new THREE.MeshPhongMaterial({ 
+                        color: type === 'beta-minus' ? 0xffd43b : 0xff6b9d,
+                        emissive: type === 'beta-minus' ? 0x332200 : 0x331122
+                    })
+                );
+                electron.userData = { velocity: new THREE.Vector3(0.4, 0.2, 0.1) };
+                scene.add(electron);
+                emittedParticles.push(electron);
+            }
+            
+            // Animate emission
+            let frame = 0;
+            const maxFrames = 120;
+            
+            function animateEmission() {
+                frame++;
+                
+                emittedParticles.forEach(p => {
+                    p.position.add(p.userData.velocity);
+                    p.userData.velocity.multiplyScalar(0.98);
+                });
+                
+                if (frame < maxFrames) {
+                    requestAnimationFrame(animateEmission);
+                } else {
+                    // Clean up
+                    emittedParticles.forEach(p => scene.remove(p));
+                    decayAnimating = false;
+                    
+                    // Update to new element
+                    const newElement = elements.find(e => e.number === newZ);
+                    if (newElement) {
+                        const cell = document.querySelector(`[data-number="${newZ}"]`);
+                        if (cell) selectElement(newElement, cell);
+                    }
+                }
+            }
+            
+            animateEmission();
+        }
+
+        // Initialize bonding panel
+        function updateBondingPanel() {
+            if (!currentElement || !settings.showBonding || viewLevel !== 'atom') {
+                document.getElementById('bonding-panel').style.display = 'none';
+                return;
+            }
+            
+            document.getElementById('bonding-panel').style.display = 'block';
+            
+            const valence = getValenceElectrons(currentElement.number);
+            const bonds = getBondsPossible(currentElement.number);
+            
+            document.getElementById('valence-count').textContent = valence;
+            document.getElementById('bonds-possible').textContent = bonds;
+            
+            const optionsContainer = document.getElementById('bonding-options');
+            optionsContainer.innerHTML = '';
+            
+            const bondInfo = bondingData[currentElement.number];
+            if (bondInfo && bondInfo.partners) {
+                bondInfo.partners.forEach(partner => {
+                    const partnerEl = elements.find(e => e.number === partner.el);
+                    if (partnerEl) {
+                        const div = document.createElement('div');
+                        div.className = 'bond-element';
+                        div.innerHTML = `
+                            <div class="symbol">${partnerEl.symbol}</div>
+                            <div class="details">
+                                <div class="name">${partnerEl.name}</div>
+                                <div class="bond-type">Forme: ${partner.formula}</div>
+                            </div>
+                        `;
+                        div.addEventListener('click', () => showMoleculePreview(partner));
+                        optionsContainer.appendChild(div);
+                    }
+                });
+            } else {
+                optionsContainer.innerHTML = '<div style="color: #606070; font-size: 9px; padding: 10px;">Données de liaison non disponibles pour cet élément</div>';
+            }
+            
+            document.getElementById('molecule-preview').innerHTML = '<span style="color: #606070; font-size: 10px;">Sélectionnez un élément ci-dessus</span>';
+        }
+
+        function showMoleculePreview(partner) {
+            const preview = document.getElementById('molecule-preview');
+            preview.innerHTML = `
+                <div class="molecule-formula">${partner.formula}</div>
+                <div class="molecule-name">${partner.name}</div>
+            `;
+        }
+
+        // Toggle educational panels
+        function toggleEducationalPanel(panel) {
+            // Reset all
+            settings.showEnergyLevels = false;
+            settings.showConfigBuilder = false;
+            settings.showDecay = false;
+            settings.showBonding = false;
+            
+            document.querySelectorAll('.edu-btn').forEach(btn => btn.classList.remove('active'));
+            
+            // Toggle selected
+            switch(panel) {
+                case 'energy':
+                    settings.showEnergyLevels = !document.getElementById('toggle-energy').classList.contains('active');
+                    if (settings.showEnergyLevels) document.getElementById('toggle-energy').classList.add('active');
+                    break;
+                case 'config':
+                    settings.showConfigBuilder = !document.getElementById('toggle-config').classList.contains('active');
+                    if (settings.showConfigBuilder) {
+                        document.getElementById('toggle-config').classList.add('active');
+                        initConfigBuilder();
+                    }
+                    break;
+                case 'decay':
+                    settings.showDecay = !document.getElementById('toggle-decay').classList.contains('active');
+                    if (settings.showDecay) document.getElementById('toggle-decay').classList.add('active');
+                    break;
+                case 'bonding':
+                    settings.showBonding = !document.getElementById('toggle-bonding').classList.contains('active');
+                    if (settings.showBonding) document.getElementById('toggle-bonding').classList.add('active');
+                    break;
+            }
+            
+            // Update displays
+            updateEnergyLevelDisplay();
+            document.getElementById('config-builder').style.display = settings.showConfigBuilder ? 'block' : 'none';
+            updateDecayPanel();
+            updateBondingPanel();
+            
+            // Rebuild atom with energy colors if needed
+            if (currentElement && viewLevel === 'atom') {
+                createAtom(currentElement);
+            }
+        }
+
+        // Control panel event listeners
+        document.getElementById('speed').addEventListener('input', (e) => {
+            settings.speed = parseFloat(e.target.value);
+            document.getElementById('speed-value').textContent = settings.speed.toFixed(1) + 'x';
+        });
+
+        document.getElementById('trail-length').addEventListener('input', (e) => {
+            settings.trailLength = parseInt(e.target.value);
+            document.getElementById('trail-value').textContent = settings.trailLength;
+            if (currentElement) createAtom(currentElement);
+        });
+
+        document.getElementById('nucleus-size').addEventListener('input', (e) => {
+            settings.nucleusSize = parseFloat(e.target.value);
+            document.getElementById('nucleus-value').textContent = settings.nucleusSize.toFixed(1) + 'x';
+            if (currentElement) createAtom(currentElement);
+        });
+
+        document.getElementById('orbit-distance').addEventListener('input', (e) => {
+            settings.orbitDistance = parseFloat(e.target.value);
+            document.getElementById('orbit-value').textContent = settings.orbitDistance.toFixed(1) + 'x';
+            if (currentElement) createAtom(currentElement);
+        });
+
+        document.getElementById('auto-rotate').addEventListener('input', (e) => {
+            settings.autoRotate = parseFloat(e.target.value);
+            document.getElementById('rotate-value').textContent = settings.autoRotate.toFixed(1);
+        });
+
+        document.getElementById('show-protons').addEventListener('change', (e) => {
+            settings.showProtons = e.target.checked;
+            if (nucleusGroup) {
+                nucleusGroup.children.forEach(p => {
+                    if (p.userData.type === 'proton') p.visible = settings.showProtons;
+                });
+            }
+        });
+
+        document.getElementById('show-neutrons').addEventListener('change', (e) => {
+            settings.showNeutrons = e.target.checked;
+            if (nucleusGroup) {
+                nucleusGroup.children.forEach(p => {
+                    if (p.userData.type === 'neutron') p.visible = settings.showNeutrons;
+                });
+            }
+        });
+
+        document.getElementById('show-electrons').addEventListener('change', (e) => {
+            settings.showElectrons = e.target.checked;
+            electrons.forEach(el => el.visible = settings.showElectrons);
+            trails.forEach(tr => tr.visible = settings.showTrails && settings.showElectrons);
+        });
+
+        document.getElementById('show-orbits').addEventListener('change', (e) => {
+            settings.showOrbits = e.target.checked;
+            orbitLines.forEach(line => line.visible = settings.showOrbits);
+        });
+
+        document.getElementById('show-trails').addEventListener('change', (e) => {
+            settings.showTrails = e.target.checked;
+            trails.forEach(tr => {
+                tr.visible = settings.showTrails && settings.showElectrons;
+                if (tr.userData.spheres) {
+                    tr.userData.spheres.forEach(s => s.visible = settings.showTrails && settings.showElectrons);
+                }
+            });
+        });
+
+        document.getElementById('show-glow').addEventListener('change', (e) => {
+            settings.showGlow = e.target.checked;
+            if (currentElement) createAtom(currentElement);
+        });
+
+        document.getElementById('reset-camera').addEventListener('click', () => {
+            if (viewLevel === 'atom') {
+                camera.position.set(0, 0, 25);
+                if (atomGroup) atomGroup.rotation.set(0, 0, 0);
+            } else if (viewLevel === 'subatomic') {
+                camera.position.set(0, 0, 12);
+                if (subatomicGroup) subatomicGroup.rotation.set(0, 0, 0);
+            } else if (viewLevel === 'quantum') {
+                camera.position.set(0, 0, 15);
+                if (quantumGroup) quantumGroup.rotation.set(0, 0, 0);
+            }
+        });
+
+        document.getElementById('back-btn').addEventListener('click', () => {
+            exitSubatomicView();
+        });
+
+        document.getElementById('random-element').addEventListener('click', () => {
+            const randomIndex = Math.floor(Math.random() * elements.length);
+            const element = elements[randomIndex];
+            const cell = document.querySelector(`[data-number="${element.number}"]`);
+            if (cell) {
+                selectElement(element, cell);
+                cell.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        });
+
+        // Educational panel event listeners
+        document.getElementById('toggle-energy').addEventListener('click', () => toggleEducationalPanel('energy'));
+        document.getElementById('toggle-config').addEventListener('click', () => toggleEducationalPanel('config'));
+        document.getElementById('toggle-decay').addEventListener('click', () => toggleEducationalPanel('decay'));
+        document.getElementById('toggle-bonding').addEventListener('click', () => toggleEducationalPanel('bonding'));
+
+        document.getElementById('close-config').addEventListener('click', () => {
+            settings.showConfigBuilder = false;
+            document.getElementById('config-builder').style.display = 'none';
+            document.getElementById('toggle-config').classList.remove('active');
+        });
+
+        document.getElementById('reset-config').addEventListener('click', () => {
+            configBuilderState.forEach((shell, sIdx) => {
+                shell.forEach((_, i) => {
+                    configBuilderState[sIdx][i] = false;
+                });
+            });
+            document.querySelectorAll('.electron-slot').forEach(slot => slot.classList.remove('filled'));
+            updateConfigNotation();
+        });
+
+        document.getElementById('auto-fill-config').addEventListener('click', autoFillConfig);
+
+        // Decay type event listeners
+        document.getElementById('alpha-decay').addEventListener('click', () => simulateDecay('alpha'));
+        document.getElementById('beta-minus-decay').addEventListener('click', () => simulateDecay('beta-minus'));
+        document.getElementById('beta-plus-decay').addEventListener('click', () => simulateDecay('beta-plus'));
+
+        // Initialize
+        initThree();
+
+        // Divider drag functionality
+        const divider = document.getElementById('divider');
+        const periodicSection = document.getElementById('periodic-section');
+        const viewerSection = document.getElementById('viewer-section');
+        let isDraggingDivider = false;
+
+        divider.addEventListener('mousedown', (e) => {
+            isDraggingDivider = true;
+            document.body.style.cursor = 'ns-resize';
+            document.body.style.userSelect = 'none';
+            e.preventDefault();
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDraggingDivider) return;
+            
+            const containerRect = document.querySelector('.container').getBoundingClientRect();
+            const newHeight = e.clientY - containerRect.top;
+            const minHeight = 150;
+            const maxHeight = containerRect.height - 200;
+            
+            if (newHeight >= minHeight && newHeight <= maxHeight) {
+                periodicSection.style.height = newHeight + 'px';
+                onWindowResize();
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (isDraggingDivider) {
+                isDraggingDivider = false;
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+            }
+        });
+    </script>
+</body>
+</html>
